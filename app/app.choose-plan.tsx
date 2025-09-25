@@ -15,13 +15,19 @@ export default function ChoosePlan() {
     console.log("[ChoosePlan] useEffect fired", { hasActionData: !!actionData, actionData });
     if (actionData && actionData.confirmationUrl && typeof window !== "undefined") {
       try {
-        // For App Bridge v4, use a top-level navigation for billing confirmation
+        // For App Bridge v4, prefer assign to avoid polluting history in nested frames
         // eslint-disable-next-line no-console
-        console.log("[ChoosePlan] Redirecting to confirmationUrl via window.top...", actionData.confirmationUrl);
-        (window.top ?? window).location.href = actionData.confirmationUrl;
+        console.log("[ChoosePlan] Redirecting to confirmationUrl via top.location.assign...", actionData.confirmationUrl);
+        (window.top ?? window).location.assign(actionData.confirmationUrl);
       } catch (e) {
         // eslint-disable-next-line no-console
-        console.error("[ChoosePlan] Top-level redirect failed", e);
+        console.error("[ChoosePlan] top.location.assign failed, trying window.open('_top')", e);
+        try {
+          window.open(actionData.confirmationUrl, "_top");
+        } catch (e2) {
+          // eslint-disable-next-line no-console
+          console.error("[ChoosePlan] window.open('_top') also failed", e2);
+        }
       }
     }
   }, [actionData]);
@@ -44,10 +50,16 @@ export default function ChoosePlan() {
                       try {
                         // eslint-disable-next-line no-console
                         console.log("[ChoosePlan] Manual redirect click: ", actionData.confirmationUrl);
-                        (window.top ?? window).location.href = actionData.confirmationUrl!;
+                        (window.top ?? window).location.assign(actionData.confirmationUrl!);
                       } catch (e) {
                         // eslint-disable-next-line no-console
-                        console.error("[ChoosePlan] Manual redirect failed", e);
+                        console.error("[ChoosePlan] Manual redirect assign failed, using window.open('_top')", e);
+                        try {
+                          window.open(actionData.confirmationUrl!, "_top");
+                        } catch (e2) {
+                          // eslint-disable-next-line no-console
+                          console.error("[ChoosePlan] Manual redirect window.open failed", e2);
+                        }
                       }
                     }}>
                       Continue to Billing Confirmation
