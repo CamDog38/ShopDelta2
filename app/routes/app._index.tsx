@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import { useFetcher } from "@remix-run/react";
 import {
   Page,
@@ -14,10 +15,15 @@ import {
   InlineStack,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { authenticate, STARTER_PLAN, PRO_PLAN } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { billing } = await authenticate.admin(request);
+  await billing.require({
+    plans: [STARTER_PLAN, PRO_PLAN],
+    // isTest: true, // Uncomment if using test stores in development
+    onFailure: async () => new Response(null, { status: 302, headers: { Location: "/app/choose-plan" } }),
+  });
 
   return null;
 };

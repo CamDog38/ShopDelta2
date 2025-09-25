@@ -21,6 +21,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
+    const url = new URL(request.url);
+    const returnUrl = `${url.origin}/app/billing/confirm`;
     // Map submitted plan slug to configured billing plan keys
     let planKey: typeof STARTER_PLAN | typeof PRO_PLAN | null = null;
     if (plan === "starter") planKey = STARTER_PLAN;
@@ -30,7 +32,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "Unknown plan." }, { status: 400 });
     }
 
-    const result = await billing.request({ plan: planKey });
+    const result = await billing.request({ plan: planKey, returnUrl });
 
     if (result && (result as any).confirmationUrl) {
       throw redirect((result as any).confirmationUrl as string);
