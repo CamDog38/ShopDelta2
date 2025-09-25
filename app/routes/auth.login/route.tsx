@@ -20,12 +20,46 @@ import { loginErrorMessage } from "./error.server";
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // If we're inside the Shopify Admin iframe, the shop domain comes via header
+  const headerShop =
+    request.headers.get("X-Shopify-Shop-Domain") ||
+    request.headers.get("x-shopify-shop-domain") ||
+    "";
+
+  const url = new URL(request.url);
+  if (headerShop && !url.searchParams.get("shop")) {
+    url.searchParams.set("shop", headerShop);
+    const forwarded = new Request(url.toString(), {
+      method: request.method,
+      headers: request.headers,
+    });
+    const errors = loginErrorMessage(await login(forwarded));
+    return { errors, polarisTranslations };
+  }
+
   const errors = loginErrorMessage(await login(request));
 
   return { errors, polarisTranslations };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const headerShop =
+    request.headers.get("X-Shopify-Shop-Domain") ||
+    request.headers.get("x-shopify-shop-domain") ||
+    "";
+
+  const url = new URL(request.url);
+  if (headerShop && !url.searchParams.get("shop")) {
+    url.searchParams.set("shop", headerShop);
+    const forwarded = new Request(url.toString(), {
+      method: request.method,
+      headers: request.headers,
+      body: await request.text(),
+    });
+    const errors = loginErrorMessage(await login(forwarded));
+    return { errors };
+  }
+
   const errors = loginErrorMessage(await login(request));
 
   return {

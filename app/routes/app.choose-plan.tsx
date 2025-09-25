@@ -15,9 +15,21 @@ export async function action({ request }: ActionFunctionArgs) {
   const plan = String(formData.get("plan") || "");
 
   if (plan === "free") {
-    // Free plan requires no billing. You can persist selection if you add a table later.
-    // For now, just redirect back into the app.
-    throw redirect("/app");
+    // Free plan requires no billing. Bypass billing by setting a secure cookie.
+    const headers = new Headers();
+    // Secure cookie; SameSite=None for embedded apps; HttpOnly to avoid JS access
+    headers.append(
+      "Set-Cookie",
+      [
+        `sd_plan=free` ,
+        `Path=/`,
+        `HttpOnly`,
+        `Secure`,
+        `SameSite=None`,
+        // Session cookie (omit Max-Age) or set a duration, e.g., Max-Age=2592000 for 30 days
+      ].join("; ")
+    );
+    throw redirect("/app", { headers });
   }
 
   try {
@@ -32,7 +44,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "Unknown plan." }, { status: 400 });
     }
 
-    const result = await billing.request({ plan: planKey, returnUrl });
+    const result = await billing.request({ plan: planKey, returnUrl, /* isTest: true */ });
 
     if (result && (result as any).confirmationUrl) {
       throw redirect((result as any).confirmationUrl as string);

@@ -12,11 +12,16 @@ export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing } = await authenticate.admin(request);
-  // Require an active subscription for access to any /app/* route
-  await billing.require({
-    plans: [STARTER_PLAN, PRO_PLAN],
-    onFailure: async () => redirect("/app/choose-plan"),
-  });
+  // If user selected Free plan previously, bypass billing requirement
+  const cookie = request.headers.get("cookie") || "";
+  const hasFreeBypass = /(?:^|;\s*)sd_plan=free(?:;|$)/i.test(cookie);
+  if (!hasFreeBypass) {
+    // Require an active subscription for access to any /app/* route
+    await billing.require({
+      plans: [STARTER_PLAN, PRO_PLAN],
+      onFailure: async () => redirect("/app/choose-plan"),
+    });
+  }
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
