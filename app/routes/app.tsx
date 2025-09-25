@@ -48,6 +48,7 @@ export default function App() {
           Home
         </Link>
         <Link to="/app/analytics">Analytics</Link>
+        <Link to="/app/billing">Billing</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>

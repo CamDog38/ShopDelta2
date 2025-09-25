@@ -34,9 +34,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Persist Free selection in DB if we know the shop
     if (shopDomain) {
-      // Ensure Plan rows exist (seeded): keys: free, starter, pro
-      const freePlan = await prisma.plan.findUnique({ where: { key: "free" } });
-      let planId = freePlan?.id || "free"; // seed used ids equal to keys
+      // Use seeded plan id directly
+      const planId = "free";
       // Upsert Shop
       const shop = await prisma.shop.upsert({
         where: { domain: shopDomain },
@@ -76,8 +75,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Create PENDING subscription record while we send to Shopify billing
     if (shopDomain) {
-      const planRow = await prisma.plan.findUnique({ where: { key: plan === "starter" ? "starter" : "pro" } });
-      const planId = planRow?.id || plan;
+      const planId = plan === "starter" ? "starter" : "pro";
       await prisma.shop.upsert({
         where: { domain: shopDomain },
         create: { id: shopDomain, domain: shopDomain, current_plan_id: planId },
