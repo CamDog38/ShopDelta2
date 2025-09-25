@@ -100,7 +100,20 @@ export async function action({ request }: ActionFunctionArgs) {
     const result = await billing.request({ plan: planKey, returnUrl, /* isTest: true */ });
 
     if (result && (result as any).confirmationUrl) {
-      return json({ confirmationUrl: (result as any).confirmationUrl as string });
+      // Clear any Free bypass cookie if present so billing requirements resume
+      const headers = new Headers();
+      headers.append(
+        "Set-Cookie",
+        [
+          `sd_plan=`,
+          `Path=/`,
+          `HttpOnly`,
+          `Secure`,
+          `SameSite=None`,
+          `Max-Age=0`,
+        ].join("; ")
+      );
+      return json({ confirmationUrl: (result as any).confirmationUrl as string }, { headers });
     }
 
     return json({ error: "Failed to create billing session." }, { status: 500 });

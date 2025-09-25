@@ -11,15 +11,17 @@ export default function ChoosePlan() {
   const submitting = nav.state === "submitting";
 
   useEffect(() => {
-    if (actionData) {
-      if (actionData.confirmationUrl && typeof window !== "undefined") {
-        try {
-          // For App Bridge v4, use a top-level navigation for billing confirmation
-          (window.top ?? window).location.href = actionData.confirmationUrl;
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.error("[ChoosePlan] Top-level redirect failed", e);
-        }
+    // eslint-disable-next-line no-console
+    console.log("[ChoosePlan] useEffect fired", { hasActionData: !!actionData, actionData });
+    if (actionData && actionData.confirmationUrl && typeof window !== "undefined") {
+      try {
+        // For App Bridge v4, use a top-level navigation for billing confirmation
+        // eslint-disable-next-line no-console
+        console.log("[ChoosePlan] Redirecting to confirmationUrl via window.top...", actionData.confirmationUrl);
+        (window.top ?? window).location.href = actionData.confirmationUrl;
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[ChoosePlan] Top-level redirect failed", e);
       }
     }
   }, [actionData]);
@@ -33,6 +35,27 @@ export default function ChoosePlan() {
               <Text as="p" variant="bodyMd">
                 Please select a plan to continue. You can start on the Free plan and upgrade later.
               </Text>
+              {actionData && actionData.confirmationUrl ? (
+                <Card>
+                  <BlockStack gap="200">
+                    <Text as="p" variant="bodyMd">Redirecting to Shopify billing confirmation...</Text>
+                    <Text as="p" variant="bodySm" tone="subdued">If this does not happen automatically, click the button below.</Text>
+                    <Button onClick={() => {
+                      try {
+                        // eslint-disable-next-line no-console
+                        console.log("[ChoosePlan] Manual redirect click: ", actionData.confirmationUrl);
+                        (window.top ?? window).location.href = actionData.confirmationUrl!;
+                      } catch (e) {
+                        // eslint-disable-next-line no-console
+                        console.error("[ChoosePlan] Manual redirect failed", e);
+                      }
+                    }}>
+                      Continue to Billing Confirmation
+                    </Button>
+                    <Text as="p" variant="bodySm" tone="subdued">URL: {actionData.confirmationUrl}</Text>
+                  </BlockStack>
+                </Card>
+              ) : null}
               {actionData && (actionData as any).error ? (
                 <Text as="p" tone="critical">{(actionData as any).error}</Text>
               ) : null}
