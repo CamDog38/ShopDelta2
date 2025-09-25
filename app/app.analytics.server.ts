@@ -570,10 +570,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       topProductsBySales,
       series,
       table,
-      headers: Array.from(counts.entries())
-        .map(([id, { title }]) => ({ id, title }))
-        .sort((a, b) => (a.title > b.title ? 1 : -1))
-        .slice(0, 20),
+      // Align headers with the same top-20-by-quantity list used to build table rows
+      headers: top20Ids.map((id) => ({
+        id,
+        title: productSet.get(id)?.title || counts.get(id)?.title || id,
+      })),
       totals: { qty: totalQty, sales: totalSales, currency: currencyCode },
       comparison,
       comparisonTable,
