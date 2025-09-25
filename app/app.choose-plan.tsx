@@ -1,13 +1,28 @@
 import { useActionData, useNavigation, Form } from "@remix-run/react";
 import { Page, Layout, Card, Text, Button, InlineStack, BlockStack, Badge } from "@shopify/polaris";
+import { useEffect } from "react";
+import { useAppBridge } from "@shopify/app-bridge-react";
+import { Redirect } from "@shopify/app-bridge/actions";
 
 // Note: This file intentionally contains only the client component to avoid
 // importing server-only modules on the client bundle.
 
 export default function ChoosePlan() {
-  const actionData = useActionData<{ error?: string }>();
+  const actionData = useActionData<{ error?: string; confirmationUrl?: string }>();
   const nav = useNavigation();
   const submitting = nav.state === "submitting";
+  const app = useAppBridge();
+
+  useEffect(() => {
+    if (actionData && actionData.confirmationUrl && app) {
+      // Perform a top-level redirect to Shopify's billing confirmation page
+      const redirect = Redirect.create(app);
+      redirect.dispatch(Redirect.Action.REMOTE, {
+        url: actionData.confirmationUrl,
+        newContext: true,
+      });
+    }
+  }, [actionData, app]);
 
   return (
     <Page title="Choose your plan">
