@@ -12,36 +12,9 @@ import prisma from "../db.server";
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { billing, session } = await authenticate.admin(request);
-  // If user selected Free plan previously, bypass billing requirement
-  const cookie = request.headers.get("cookie") || "";
-  const hasFreeBypass = /(?:^|;\s*)sd_plan=free(?:;|$)/i.test(cookie);
-  if (!hasFreeBypass) {
-    // Check DB for an active subscription (covers free and paid)
-    const shopDomain = (session as any)?.shop || (session as any)?.dest || "";
-    const url = new URL(request.url);
-    const host = url.searchParams.get("host") || "";
-    if (shopDomain) {
-      const shop = await prisma.shop.findUnique({
-        where: { id: shopDomain },
-        include: { subscription_shop_subscription_idTosubscription: true },
-      });
-      const current = shop?.subscription_shop_subscription_idTosubscription;
-      if (current?.status === "ACTIVE") {
-        return { apiKey: process.env.SHOPIFY_API_KEY || "" };
-      }
-    }
-    // Require an active paid subscription otherwise
-    await billing.require({
-      plans: [STARTER_PLAN, PRO_PLAN],
-      onFailure: async () => {
-        const params = new URLSearchParams();
-        if (shopDomain) params.set("shop", shopDomain);
-        if (host) params.set("host", host);
-        return redirect(`/app/choose-plan${params.toString() ? `?${params.toString()}` : ""}`);
-      },
-    });
-  }
+  // TEMP: Disable billing requirement to test app without choose plan flow
+  // const { billing, session } = await authenticate.admin(request);
+  await authenticate.admin(request);
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
