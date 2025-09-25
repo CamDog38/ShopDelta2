@@ -1,3 +1,4 @@
+import type { HeadersFunction } from "@remix-run/node";
 import {
   Links,
   Meta,
@@ -5,6 +6,7 @@ import {
   Scripts,
   ScrollRestoration,
 } from "@remix-run/react";
+import { remixHeaders } from "./security-headers";
 
 export default function App() {
   return (
@@ -28,3 +30,5 @@ export default function App() {
     </html>
   );
 }
+
+export const headers: HeadersFunction = (args) => remixHeaders(args);

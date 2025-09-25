@@ -133,7 +133,7 @@ export default function ChoosePlan() {
               </InlineStack>
 
               <Text as="p" variant="bodySm" tone="subdued">
-                Free to install with optional paid plans (Starter, Pro). Zero data retention. All requests are HMAC verified.
+                Free to install with optional paid plans (Starter, Pro).
               </Text>
             </BlockStack>
           </Card>
