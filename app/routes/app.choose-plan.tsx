@@ -100,7 +100,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const result = await billing.request({ plan: planKey, returnUrl, /* isTest: true */ });
 
     if (result && (result as any).confirmationUrl) {
-      throw redirect((result as any).confirmationUrl as string);
+      return json({ confirmationUrl: (result as any).confirmationUrl as string });
     }
 
     return json({ error: "Failed to create billing session." }, { status: 500 });
