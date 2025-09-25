@@ -19,6 +19,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!hasFreeBypass) {
     // Check DB for an active subscription (covers free and paid)
     const shopDomain = (session as any)?.shop || (session as any)?.dest || "";
+    const url = new URL(request.url);
+    const host = url.searchParams.get("host") || "";
     if (shopDomain) {
       const shop = await prisma.shop.findUnique({
         where: { id: shopDomain },
@@ -32,7 +34,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Require an active paid subscription otherwise
     await billing.require({
       plans: [STARTER_PLAN, PRO_PLAN],
-      onFailure: async () => redirect("/app/choose-plan"),
+      onFailure: async () => {
+        const params = new URLSearchParams();
+        if (shopDomain) params.set("shop", shopDomain);
+        if (host) params.set("host", host);
+        return redirect(`/app/choose-plan${params.toString() ? `?${params.toString()}` : ""}`);
+      },
     });
   }
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };

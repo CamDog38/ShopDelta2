@@ -20,15 +20,36 @@ import { loginErrorMessage } from "./error.server";
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  // If we're inside the Shopify Admin iframe, the shop domain comes via header
+  const url = new URL(request.url);
+  const directShop = url.searchParams.get("shop") || "";
+
+  // Try multiple sources to derive the shop domain
   const headerShop =
     request.headers.get("X-Shopify-Shop-Domain") ||
     request.headers.get("x-shopify-shop-domain") ||
     "";
+  const hostParam = url.searchParams.get("host") || "";
+  let hostShop = "";
+  try {
+    if (hostParam) {
+      const decoded = Buffer.from(hostParam, "base64").toString("utf8");
+      // decoded forms like: test-store.myshopify.com/admin
+      const parts = decoded.split("/");
+      hostShop = parts[0] || "";
+    }
+  } catch {}
+  let refererShop = "";
+  try {
+    const ref = request.headers.get("Referer") || request.headers.get("referer");
+    if (ref) {
+      const rurl = new URL(ref);
+      refererShop = rurl.searchParams.get("shop") || "";
+    }
+  } catch {}
 
-  const url = new URL(request.url);
-  if (headerShop && !url.searchParams.get("shop")) {
-    url.searchParams.set("shop", headerShop);
+  const inferredShop = directShop || headerShop || hostShop || refererShop;
+  if (inferredShop && !directShop) {
+    url.searchParams.set("shop", inferredShop);
     const forwarded = new Request(url.toString(), {
       method: request.method,
       headers: request.headers,
@@ -43,14 +64,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const url = new URL(request.url);
+  const directShop = url.searchParams.get("shop") || "";
   const headerShop =
     request.headers.get("X-Shopify-Shop-Domain") ||
     request.headers.get("x-shopify-shop-domain") ||
     "";
+  const hostParam = url.searchParams.get("host") || "";
+  let hostShop = "";
+  try {
+    if (hostParam) {
+      const decoded = Buffer.from(hostParam, "base64").toString("utf8");
+      hostShop = decoded.split("/")[0] || "";
+    }
+  } catch {}
+  let refererShop = "";
+  try {
+    const ref = request.headers.get("Referer") || request.headers.get("referer");
+    if (ref) {
+      const rurl = new URL(ref);
+      refererShop = rurl.searchParams.get("shop") || "";
+    }
+  } catch {}
 
-  const url = new URL(request.url);
-  if (headerShop && !url.searchParams.get("shop")) {
-    url.searchParams.set("shop", headerShop);
+  const inferredShop = directShop || headerShop || hostShop || refererShop;
+  if (inferredShop && !directShop) {
+    url.searchParams.set("shop", inferredShop);
     const forwarded = new Request(url.toString(), {
       method: request.method,
       headers: request.headers,
