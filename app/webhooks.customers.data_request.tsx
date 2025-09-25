@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
-import { createGDPRResponse, verifyWebhookRequest } from "../utils/webhook-verification";
+import { authenticate } from "./shopify.server";
+import { createGDPRResponse, verifyWebhookRequest } from "./utils/webhook-verification";
 
 /**
  * GDPR Data Request Webhook
