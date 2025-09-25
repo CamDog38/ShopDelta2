@@ -5,13 +5,18 @@ import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
-import { authenticate } from "../shopify.server";
+import { authenticate, STARTER_PLAN, PRO_PLAN } from "../shopify.server";
+import { redirect } from "@remix-run/node";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-
+  const { billing } = await authenticate.admin(request);
+  // Require an active subscription for access to any /app/* route
+  await billing.require({
+    plans: [STARTER_PLAN, PRO_PLAN],
+    onFailure: async () => redirect("/app/choose-plan"),
+  });
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
