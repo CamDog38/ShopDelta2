@@ -469,26 +469,27 @@ export default function AnalyticsPage() {
             </div>
             <div style={{ marginLeft: 'auto' }}>
               <div 
-                onClick={exportWorkbook} 
+                onClick={(e) => { e.preventDefault(); }}
+                title="Coming soon"
                 style={{
                   padding: '12px 20px',
                   borderRadius: '8px',
-                  background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-                  color: 'white',
-                  cursor: (isNavLoading || isExporting) ? 'not-allowed' : 'pointer',
+                  background: 'linear-gradient(135deg, #c7c7c7 0%, #e0e0e0 100%)',
+                  color: '#6b7280',
+                  cursor: 'not-allowed',
                   fontWeight: '600',
                   fontSize: '14px',
                   border: 'none',
                   transition: 'all 0.3s ease',
                   backdropFilter: 'blur(10px)',
-                  opacity: (isNavLoading || isExporting) ? 0.6 : 1,
-                  boxShadow: '0 4px 15px rgba(250, 112, 154, 0.4)',
+                  opacity: 0.6,
+                  boxShadow: 'none',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px'
                 }}
               >
-                {isExporting ? '⏳' : '📥'} Export Excel
+                🚧 Export Excel (Coming soon)
               </div>
             </div>
           </InlineStack>

@@ -1,4 +1,4 @@
-import { useActionData, useNavigation, Form, useLocation } from "@remix-run/react";
+import { useActionData, useNavigation, Form, useLocation, useLoaderData } from "@remix-run/react";
 import { Page, Layout, Card, Text, Button, InlineStack, BlockStack, Badge } from "@shopify/polaris";
 import { useEffect } from "react";
 
@@ -6,6 +6,7 @@ import { useEffect } from "react";
 // importing server-only modules on the client bundle.
 
 export default function ChoosePlan() {
+  const loaderData = useLoaderData<{ shop: string; currentPlanId: string | null; currentStatus: string | null } | undefined>();
   const actionData = useActionData<{ error?: string; confirmationUrl?: string }>();
   const nav = useNavigation();
   const submitting = nav.state === "submitting";
@@ -13,6 +14,7 @@ export default function ChoosePlan() {
   const hostParam = typeof window !== 'undefined' 
     ? (new URLSearchParams(location.search).get('host') ?? '') 
     : '';
+  const isFreeActive = (loaderData?.currentPlanId === 'free') && ((loaderData?.currentStatus || '').toUpperCase() === 'ACTIVE');
 
   useEffect(() => {
     // eslint-disable-next-line no-console
@@ -81,12 +83,18 @@ export default function ChoosePlan() {
                   <BlockStack gap="200">
                     <Text as="h2" variant="headingLg">Free</Text>
                     <Text as="p" variant="bodyMd">$0 per month</Text>
-                    <Badge tone="success">No trial</Badge>
+                    {isFreeActive ? (
+                      <Badge tone="success">Current plan</Badge>
+                    ) : (
+                      <Badge tone="success">No trial</Badge>
+                    )}
                     <Text as="p" variant="bodyMd">Feature limits apply. No billing required.</Text>
-                    <Form method="post">
+                    <Form method="post" onSubmit={(e) => { if (isFreeActive) { e.preventDefault(); } }}>
                       <input type="hidden" name="plan" value="free" />
                       <input type="hidden" name="host" value={hostParam} />
-                      <Button submit loading={submitting} variant="primary">Choose Free</Button>
+                      <Button submit={!isFreeActive} disabled={isFreeActive} loading={submitting && !isFreeActive} variant="primary">
+                        {isFreeActive ? 'Current plan' : 'Choose Free'}
+                      </Button>
                     </Form>
                   </BlockStack>
                 </Card>

@@ -4,10 +4,30 @@ import ChoosePlan from "../app.choose-plan";
 import { authenticate, STARTER_PLAN, PRO_PLAN } from "../shopify.server";
 import prisma from "../db.server";
 
+export type ChoosePlanLoaderData = {
+  shop: string;
+  currentPlanId: string | null;
+  currentStatus: string | null;
+};
+
 export async function loader({ request }: LoaderFunctionArgs) {
   // Must be an authenticated admin to choose a plan
-  await authenticate.admin(request);
-  return json({});
+  const { session } = await authenticate.admin(request);
+  const shopDomain = (session as any)?.shop || (session as any)?.dest || "";
+  let currentPlanId: string | null = null;
+  let currentStatus: string | null = null;
+  if (shopDomain) {
+    const shop = await prisma.shop.findUnique({
+      where: { id: shopDomain },
+      include: { subscription_shop_subscription_idTosubscription: true },
+    });
+    if (shop?.subscription_shop_subscription_idTosubscription) {
+      currentPlanId = shop.subscription_shop_subscription_idTosubscription.plan_id as any;
+      currentStatus = shop.subscription_shop_subscription_idTosubscription.status as any;
+    }
+  }
+  const data: ChoosePlanLoaderData = { shop: shopDomain, currentPlanId, currentStatus };
+  return json(data);
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -19,34 +39,37 @@ export async function action({ request }: ActionFunctionArgs) {
   if (plan === "free") {
     // Free plan requires no billing. Bypass billing by setting a secure cookie.
     const headers = new Headers();
-    // Secure cookie; SameSite=None for embedded apps; HttpOnly to avoid JS access
     headers.append(
       "Set-Cookie",
       [
-        `sd_plan=free` ,
+        `sd_plan=free`,
         `Path=/`,
         `HttpOnly`,
         `Secure`,
         `SameSite=None`,
-        // Session cookie (omit Max-Age) or set a duration, e.g., Max-Age=2592000 for 30 days
       ].join("; ")
     );
 
-    // Persist Free selection in DB if we know the shop
     if (shopDomain) {
-      // Use seeded plan id directly
       const planId = "free";
-      // Upsert Shop
+      // Ensure shop exists and points to current plan
       const shop = await prisma.shop.upsert({
         where: { domain: shopDomain },
         create: { id: shopDomain, domain: shopDomain, current_plan_id: planId },
         update: { current_plan_id: planId },
       });
-      // Create new ACTIVE subscription record for Free (no Shopify GID)
-      const sub = await prisma.subscription.create({
-        data: {
-          id: `${shop.id}::free`,
+      // Idempotent upsert of free subscription to avoid unique id collisions
+      const subId = `${shop.id}::free`;
+      const sub = await prisma.subscription.upsert({
+        where: { id: subId },
+        create: {
+          id: subId,
           shop_id: shop.id,
+          plan_id: planId,
+          status: "ACTIVE" as any,
+          is_test: false,
+        },
+        update: {
           plan_id: planId,
           status: "ACTIVE" as any,
           is_test: false,
@@ -97,7 +120,12 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
 
+    // Debug: log plan and returnUrl before requesting billing
+    console.log("[choose-plan action] requesting billing", { plan, mappedPlan: planKey, returnUrl });
     const result = await billing.request({ plan: planKey, returnUrl, /* isTest: true */ });
+    // Debug: log if we received a confirmation URL
+    const debugUrl = (result as any)?.confirmationUrl as string | undefined;
+    console.log("[choose-plan action] billing.request result", { hasUrl: !!debugUrl, confirmationUrl: debugUrl?.slice(0, 120) });
 
     if (result && (result as any).confirmationUrl) {
       // Clear any Free bypass cookie if present so billing requirements resume
