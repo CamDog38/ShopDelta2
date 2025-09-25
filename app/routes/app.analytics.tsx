@@ -1,2 +1,2 @@
 export { loader } from "../app.analytics.server";
-export { links, default } from "../app.analytics.client";
+export { links, default } from "../app.analytics";
