@@ -1,53 +1,11 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
 import { useActionData, useNavigation, Form } from "@remix-run/react";
 import { Page, Layout, Card, Text, Button, InlineStack, BlockStack, Badge } from "@shopify/polaris";
 
-import { authenticate, STARTER_PLAN, PRO_PLAN } from "./shopify.server";
-
-export async function loader({ request }: LoaderFunctionArgs) {
-  // Must be an authenticated admin to choose a plan
-  await authenticate.admin(request);
-  return json({});
-}
-
-export async function action({ request }: ActionFunctionArgs) {
-  const { billing } = await authenticate.admin(request);
-  const formData = await request.formData();
-  const plan = String(formData.get("plan") || "");
-
-  if (plan === "free") {
-    // Free plan requires no billing. You can persist selection if you add a table later.
-    // For now, just redirect back into the app.
-    throw redirect("/app");
-  }
-
-  // For paid plans, create a recurring subscription via Shopify Billing API
-  try {
-    // Map submitted plan slug to configured billing plan keys
-    let planKey: typeof STARTER_PLAN | typeof PRO_PLAN | null = null;
-    if (plan === "starter") planKey = STARTER_PLAN;
-    if (plan === "pro") planKey = PRO_PLAN;
-
-    if (!planKey) {
-      return json({ error: "Unknown plan." }, { status: 400 });
-    }
-
-    const result = await billing.request({ plan: planKey });
-
-    // Redirect merchant to confirm the subscription
-    if (result && (result as any).confirmationUrl) {
-      throw redirect((result as any).confirmationUrl as string);
-    }
-
-    return json({ error: "Failed to create billing session." }, { status: 500 });
-  } catch (e: any) {
-    return json({ error: e?.message || "Billing request failed." }, { status: 500 });
-  }
-}
+// Note: This file intentionally contains only the client component to avoid
+// importing server-only modules on the client bundle.
 
 export default function ChoosePlan() {
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<{ error?: string }>();
   const nav = useNavigation();
   const submitting = nav.state === "submitting";
 
