@@ -7,16 +7,29 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { authenticate, STARTER_PLAN, PRO_PLAN } from "../shopify.server";
 import { redirect } from "@remix-run/node";
+import prisma from "../db.server";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { billing } = await authenticate.admin(request);
+  const { billing, session } = await authenticate.admin(request);
   // If user selected Free plan previously, bypass billing requirement
   const cookie = request.headers.get("cookie") || "";
   const hasFreeBypass = /(?:^|;\s*)sd_plan=free(?:;|$)/i.test(cookie);
   if (!hasFreeBypass) {
-    // Require an active subscription for access to any /app/* route
+    // Check DB for an active subscription (covers free and paid)
+    const shopDomain = (session as any)?.shop || (session as any)?.dest || "";
+    if (shopDomain) {
+      const shop = await prisma.shop.findUnique({
+        where: { id: shopDomain },
+        include: { subscription_shop_subscription_idTosubscription: true },
+      });
+      const current = shop?.subscription_shop_subscription_idTosubscription;
+      if (current?.status === "ACTIVE") {
+        return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+      }
+    }
+    // Require an active paid subscription otherwise
     await billing.require({
       plans: [STARTER_PLAN, PRO_PLAN],
       onFailure: async () => redirect("/app/choose-plan"),

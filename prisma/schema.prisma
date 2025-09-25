@@ -24,5 +24,84 @@ model Session {
   locale        String?
   collaborator  Boolean?  @default(false)
   emailVerified Boolean?  @default(false)
+
   @@map("session")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model plan {
+  id           String         @id
+  key          String         @unique
+  name         String
+  price        Decimal        @db.Decimal(10, 2)
+  interval     String
+  active       Boolean        @default(true)
+  created_at   DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime       @default(now()) @db.Timestamptz(6)
+  shop         shop[]
+  subscription subscription[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model shop {
+  id                                              String         @id
+  domain                                          String         @unique
+  created_at                                      DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at                                      DateTime       @default(now()) @db.Timestamptz(6)
+  current_plan_id                                 String?
+  subscription_id                                 String?
+  plan                                            plan?          @relation(fields: [current_plan_id], references: [id], map: "fk_shop_current_plan")
+  subscription_shop_subscription_idTosubscription subscription?  @relation("shop_subscription_idTosubscription", fields: [subscription_id], references: [id], map: "fk_shop_subscription")
+  subscription_subscription_shop_idToshop         subscription[] @relation("subscription_shop_idToshop")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model subscription {
+  id                                      String               @id
+  shop_id                                 String
+  plan_id                                 String?
+  shopify_subscription_gid                String?
+  status                                  subscription_status
+  trial_ends_at                           DateTime?            @db.Timestamptz(6)
+  current_period_start                    DateTime?            @db.Timestamptz(6)
+  current_period_end                      DateTime?            @db.Timestamptz(6)
+  is_test                                 Boolean              @default(false)
+  created_at                              DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                              DateTime             @default(now()) @db.Timestamptz(6)
+  shop_shop_subscription_idTosubscription shop[]               @relation("shop_subscription_idTosubscription")
+  plan                                    plan?                @relation(fields: [plan_id], references: [id], map: "fk_subscription_plan")
+  shop_subscription_shop_idToshop         shop                 @relation("subscription_shop_idToshop", fields: [shop_id], references: [id], map: "fk_subscription_shop")
+  subscription_event                      subscription_event[]
+
+  @@index([plan_id], map: "idx_subscription_plan_id")
+  @@index([shop_id], map: "idx_subscription_shop_id")
+  @@index([status], map: "idx_subscription_status")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model subscription_event {
+  id              String                  @id
+  subscription_id String
+  type            subscription_event_type
+  payload         Json?
+  created_at      DateTime                @default(now()) @db.Timestamptz(6)
+  subscription    subscription            @relation(fields: [subscription_id], references: [id], onDelete: Cascade, map: "fk_event_subscription")
+
+  @@index([subscription_id], map: "idx_subscription_event_subscription_id")
+}
+
+enum subscription_event_type {
+  CREATED
+  ACTIVATED
+  CANCELLED
+  RENEWED
+  FAILED
+  UPDATED
+}
+
+enum subscription_status {
+  ACTIVE
+  PENDING
+  CANCELLED
+  EXPIRED
 }

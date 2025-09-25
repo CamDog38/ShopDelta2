@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import ChoosePlan from "../app.choose-plan";
 import { authenticate, STARTER_PLAN, PRO_PLAN } from "../shopify.server";
+import prisma from "../db.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Must be an authenticated admin to choose a plan
@@ -10,9 +11,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { billing } = await authenticate.admin(request);
+  const { billing, session } = await authenticate.admin(request as any);
   const formData = await request.formData();
   const plan = String(formData.get("plan") || "");
+  const shopDomain = (session as any)?.shop || (session as any)?.dest || "";
 
   if (plan === "free") {
     // Free plan requires no billing. Bypass billing by setting a secure cookie.
@@ -29,6 +31,34 @@ export async function action({ request }: ActionFunctionArgs) {
         // Session cookie (omit Max-Age) or set a duration, e.g., Max-Age=2592000 for 30 days
       ].join("; ")
     );
+
+    // Persist Free selection in DB if we know the shop
+    if (shopDomain) {
+      // Ensure Plan rows exist (seeded): keys: free, starter, pro
+      const freePlan = await prisma.plan.findUnique({ where: { key: "free" } });
+      let planId = freePlan?.id || "free"; // seed used ids equal to keys
+      // Upsert Shop
+      const shop = await prisma.shop.upsert({
+        where: { domain: shopDomain },
+        create: { id: shopDomain, domain: shopDomain, current_plan_id: planId },
+        update: { current_plan_id: planId },
+      });
+      // Create new ACTIVE subscription record for Free (no Shopify GID)
+      const sub = await prisma.subscription.create({
+        data: {
+          id: `${shop.id}::free`,
+          shop_id: shop.id,
+          plan_id: planId,
+          status: "ACTIVE" as any,
+          is_test: false,
+        },
+      });
+      // Set shortcut pointers on Shop
+      await prisma.shop.update({
+        where: { id: shop.id },
+        data: { subscription_id: sub.id },
+      });
+    }
     throw redirect("/app", { headers });
   }
 
@@ -42,6 +72,31 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (!planKey) {
       return json({ error: "Unknown plan." }, { status: 400 });
+    }
+
+    // Create PENDING subscription record while we send to Shopify billing
+    if (shopDomain) {
+      const planRow = await prisma.plan.findUnique({ where: { key: plan === "starter" ? "starter" : "pro" } });
+      const planId = planRow?.id || plan;
+      await prisma.shop.upsert({
+        where: { domain: shopDomain },
+        create: { id: shopDomain, domain: shopDomain, current_plan_id: planId },
+        update: { current_plan_id: planId },
+      });
+      await prisma.subscription.upsert({
+        where: { id: `${shopDomain}::${plan}` },
+        create: {
+          id: `${shopDomain}::${plan}`,
+          shop_id: shopDomain,
+          plan_id: planId,
+          status: "PENDING" as any,
+          is_test: true,
+        },
+        update: {
+          plan_id: planId,
+          status: "PENDING" as any,
+        },
+      });
     }
 
     const result = await billing.request({ plan: planKey, returnUrl, /* isTest: true */ });
