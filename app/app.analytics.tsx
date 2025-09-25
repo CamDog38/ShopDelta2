@@ -4,7 +4,6 @@ import { useLoaderData, useLocation, useRouteError, useSubmit, useNavigation } f
 import { useState } from "react";
 import { Page, DataTable, BlockStack, Text, Link, Button, InlineStack, Spinner } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { authenticate } from "./shopify.server";
 import analyticsStylesUrl from "../styles/analytics.css?url";
 
 export const links: LinksFunction = () => [
@@ -31,6 +30,8 @@ function fmtYMD(d: Date) {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // Import server-only utilities dynamically to avoid leaking into the client bundle
+  const { authenticate } = await import("./shopify.server");
   const DEBUG = process.env.DEBUG_ANALYTICS === "1";
   const dlog = (...args: any[]) => {
     if (DEBUG) console.log("[analytics]", ...args);
