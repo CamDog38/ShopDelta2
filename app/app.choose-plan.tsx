@@ -98,42 +98,10 @@ export default function ChoosePlan() {
                     </Form>
                   </BlockStack>
                 </Card>
-
-                <div style={{ opacity: 0.5 }}>
-                  <Card roundedAbove="sm">
-                    <BlockStack gap="200">
-                      <Text as="h2" variant="headingLg">Starter</Text>
-                      <Text as="p" variant="bodyMd">$5 / month</Text>
-                      <Badge tone="attention">Coming soon</Badge>
-                      <Text as="p" variant="bodyMd">Additional features. Subscription required.</Text>
-                      <Form method="post" onSubmit={(e) => e.preventDefault()}>
-                        <input type="hidden" name="plan" value="starter" />
-                        <input type="hidden" name="host" value={hostParam} />
-                        <Button disabled accessibilityLabel="Coming soon">Coming soon</Button>
-                      </Form>
-                    </BlockStack>
-                  </Card>
-                </div>
-
-                <div style={{ opacity: 0.5 }}>
-                  <Card roundedAbove="sm">
-                    <BlockStack gap="200">
-                      <Text as="h2" variant="headingLg">Pro</Text>
-                      <Text as="p" variant="bodyMd">$15 / month</Text>
-                      <Badge tone="attention">Coming soon</Badge>
-                      <Text as="p" variant="bodyMd">Full features. Subscription required.</Text>
-                      <Form method="post" onSubmit={(e) => e.preventDefault()}>
-                        <input type="hidden" name="plan" value="pro" />
-                        <input type="hidden" name="host" value={hostParam} />
-                        <Button disabled accessibilityLabel="Coming soon">Coming soon</Button>
-                      </Form>
-                    </BlockStack>
-                  </Card>
-                </div>
               </InlineStack>
 
               <Text as="p" variant="bodySm" tone="subdued">
-                Free to install with optional paid plans (Starter, Pro).
+                Free to install.
               </Text>
             </BlockStack>
           </Card>
