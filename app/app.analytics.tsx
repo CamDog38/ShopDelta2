@@ -1419,19 +1419,27 @@ export default function AnalyticsPage() {
                       border: '1px solid var(--p-color-border)'
                     }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr style={{ background: 'var(--p-color-bg-surface-secondary)' }}>
-                            <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}>Product</th>
-                            <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}>Qty (Curr)</th>
-                            <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}>Qty (Prev)</th>
-                            <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}>Qty Δ</th>
-                            <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}>Qty Δ%</th>
-                            <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}>Sales (Curr)</th>
-                            <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}>Sales (Prev)</th>
-                            <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}>Sales Δ</th>
-                            <th style={{ padding: '12px', textAlign: 'right', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}>Sales Δ%</th>
-                          </tr>
-                        </thead>
+                        {(() => {
+                          const prodHeadings = (clientComparisonHeaders || comparisonHeaders || productYoyHeadingsFallback || [
+                            'Product',
+                            'Qty (Curr)','Qty (Prev)','Qty Δ','Qty Δ%',
+                            'Sales (Curr)','Sales (Prev)','Sales Δ','Sales Δ%'
+                          ]);
+                          return (
+                            <thead>
+                              <tr style={{ background: 'var(--p-color-bg-surface-secondary)' }}>
+                                {prodHeadings.map((h, i) => (
+                                  <th
+                                    key={i}
+                                    style={{ padding: '12px', textAlign: i === 0 ? 'left' : 'right', borderBottom: '1px solid var(--p-color-border)', fontWeight: '600', fontSize: '14px' }}
+                                  >
+                                    {h}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                          );
+                        })()}
                         <tbody>
                           {((data as any).comparisonTable as any[]).map((r: any, index: number) => (
                             <tr key={index} style={{ borderBottom: '1px solid var(--p-color-border-subdued)' }}>
