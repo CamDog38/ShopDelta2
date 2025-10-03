@@ -388,6 +388,67 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 salesDelta: b.sales - a.sales,
                 salesDeltaPct: a.sales ? (((b.sales - a.sales) / a.sales) * 100) : null,
               });
+            } else {
+              // Fetch those months directly if not present in current range
+              const parseYM = (k: string) => { const [y, m] = k.split('-').map((x)=>parseInt(x,10)); return { y, m }; };
+              const monthRange = (y: number, m1to12: number) => {
+                const s = new Date(Date.UTC(y, m1to12 - 1, 1));
+                const e = new Date(Date.UTC(y, m1to12, 0, 23, 59, 59, 999));
+                return { s, e };
+              };
+              const fetchTotals = async (s: Date, e: Date) => {
+                const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
+                let after: string | null = null; let qty = 0; let sales = 0;
+                while (true) {
+                  const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
+                  const data = await res.json();
+                  const edges = (data as any)?.data?.orders?.edges ?? [];
+                  for (const ed of edges) {
+                    const liEdges = ed?.node?.lineItems?.edges ?? [];
+                    for (const li of liEdges) {
+                      const q = li?.node?.quantity ?? 0; qty += q;
+                      const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                      const amt = amountStr ? parseFloat(amountStr) : 0; sales += amt;
+                    }
+                  }
+                  const page = (data as any)?.data?.orders;
+                  if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
+                }
+                return { qty, sales };
+              };
+              const { y: yA, m: mA } = parseYM(momA);
+              const { y: yB, m: mB } = parseYM(momB);
+              const ra = monthRange(yA, mA); const rb = monthRange(yB, mB);
+              const prev = await fetchTotals(ra.s, ra.e);
+              const curr = await fetchTotals(rb.s, rb.e);
+              const label = (y:number,m:number) => {
+                const d = new Date(Date.UTC(y,m-1,1));
+                return `${d.toLocaleString('en-US',{month:'short'})} ${y}`;
+              };
+              rows.push({
+                period: `${label(yA,mA)} → ${label(yB,mB)}`,
+                qtyCurr: curr.qty,
+                qtyPrev: prev.qty,
+                qtyDelta: curr.qty - prev.qty,
+                qtyDeltaPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
+                salesCurr: curr.sales,
+                salesPrev: prev.sales,
+                salesDelta: curr.sales - prev.sales,
+                salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
+              });
+              // Override summary to match explicit MoM selection
+              comparison = {
+                mode: compareMode,
+                current: { qty: curr.qty, sales: curr.sales },
+                previous: { qty: prev.qty, sales: prev.sales },
+                deltas: {
+                  qty: curr.qty - prev.qty,
+                  qtyPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
+                  sales: curr.sales - prev.sales,
+                  salesPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
+                },
+                prevRange: { start: fmtYMD(ra.s), end: fmtYMD(ra.e) },
+              };
             }
           } else {
             for (let i = 1; i < ordered.length; i++) {
@@ -407,7 +468,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             }
           }
           comparisonTable = rows;
-          comparisonHeaders = ["Period", "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%", "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%"]; 
+          if (momA && momB) {
+            const [ya, ma] = momA.split('-').map((x)=>parseInt(x,10));
+            const [yb, mb] = momB.split('-').map((x)=>parseInt(x,10));
+            const la = `${new Date(Date.UTC(ya, ma-1, 1)).toLocaleString('en-US',{month:'short'})} ${ya}`;
+            const lb = `${new Date(Date.UTC(yb, mb-1, 1)).toLocaleString('en-US',{month:'short'})} ${yb}`;
+            comparisonHeaders = ["Period", `Qty (${lb})`, `Qty (${la})`, "Qty Δ", "Qty Δ%", `Sales (${lb})`, `Sales (${la})`, "Sales Δ", "Sales Δ%"];
+          } else {
+            comparisonHeaders = ["Period", "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%", "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%"]; 
+          }
         } else {
           const monthlyCurr = new Map<string, { label: string; qty: number; sales: number }>();
           for (const [key, info] of buckets.entries()) {
@@ -448,7 +517,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             }
           }
           // Keep broad lists; do not restrict to in-range months
-          comparisonHeaders = ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]; 
+          if (yoyA && yoyB) {
+            const [ya, ma] = yoyA.split('-').map((x)=>parseInt(x,10));
+            const [yb, mb] = yoyB.split('-').map((x)=>parseInt(x,10));
+            const la = `${new Date(Date.UTC(ya, ma-1, 1)).toLocaleString('en-US',{month:'short'})} ${ya}`;
+            const lb = `${new Date(Date.UTC(yb, mb-1, 1)).toLocaleString('en-US',{month:'short'})} ${yb}`;
+            comparisonHeaders = ["Period", `Qty (${lb})`, `Qty (${la})`, "Qty Δ", "Qty Δ%", `Sales (${lb})`, `Sales (${la})`, "Sales Δ", "Sales Δ%"];
+          } else {
+            comparisonHeaders = ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]; 
+          }
           const rows: Array<Record<string, any>> = [];
           if (yoyA && yoyB) {
             // Fetch exact months independently of the selected range
@@ -591,10 +668,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           }
           rows.sort((x, y) => (y.salesDelta as number) - (x.salesDelta as number));
           comparisonTable = rows.slice(0, 100);
+          const fmtYM = (ym?: string) => {
+            if (!ym) return '';
+            const [yy, mm] = ym.split('-').map((x)=>parseInt(x,10));
+            const d = new Date(Date.UTC(yy, mm-1, 1));
+            return `${d.toLocaleString('en-US',{ month: 'short' })} ${yy}`;
+          };
+          const la = aKey ? fmtYM(aKey) : 'Prev';
+          const lb = bKey ? fmtYM(bKey) : 'Curr';
           comparisonHeaders = [
-            `Product (${monthLabel(aKey)} → ${monthLabel(bKey)})`,
-            "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%",
-            "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%",
+            `Product (${la} → ${lb})`,
+            `Qty (${lb})`, `Qty (${la})`, "Qty Δ", "Qty Δ%",
+            `Sales (${lb})`, `Sales (${la})`, "Sales Δ", "Sales Δ%",
           ];
         } else {
           comparisonHeaders = ["Product", "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%", "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%"];

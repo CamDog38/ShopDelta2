@@ -1028,49 +1028,63 @@ export default function AnalyticsPage() {
                 
                 {(!filters?.compare || filters?.compare === 'mom') && (
                   <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '16px', borderRadius: '8px' }}>
-                    <Text as="span" variant="bodySm" tone="subdued">Month Selection (optional - leave blank for automatic consecutive months)</Text>
+                    <Text as="span" variant="bodySm" tone="subdued">Month-over-Month Selection (independent of top date range)</Text>
                     <div style={{ marginTop: '8px' }}>
                       <InlineStack gap="200" wrap>
-                      <div style={{ minWidth: '140px' }}>
-                        <Text as="span" variant="bodySm">From Month</Text>
-                        <select id="momA" defaultValue={filters?.momA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
-                          <option value="">(auto-select)</option>
-                          {momMonths.map((m) => (
-                            <option key={m.key} value={m.key}>{m.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={{ minWidth: '140px' }}>
-                        <Text as="span" variant="bodySm">To Month</Text>
-                        <select id="momB" defaultValue={filters?.momB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
-                          <option value="">(auto-select next)</option>
-                          {momMonths.map((m) => (
-                            <option key={m.key} value={m.key}>{m.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={{ alignSelf: 'flex-end' }}>
-                        <div onClick={() => {
-                          const a = (document.getElementById('momA') as HTMLSelectElement | null)?.value || '';
-                          const b = (document.getElementById('momB') as HTMLSelectElement | null)?.value || '';
-                          const scope = (filters?.compareScope as string) || 'aggregate';
-                          applyPatch({ view: 'compare', compare: 'mom', compareScope: scope, momA: a, momB: b });
-                        }} style={{
-                          padding: '10px 20px',
-                          borderRadius: '8px',
-                          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                          color: 'white',
-                          cursor: isNavLoading ? 'not-allowed' : 'pointer',
-                          fontWeight: '600',
-                          fontSize: '14px',
-                          border: 'none',
-                          transition: 'all 0.3s ease',
-                          opacity: isNavLoading ? 0.6 : 1,
-                          boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
-                        }}>
-                          Update Comparison
+                        <div style={{ minWidth: '140px' }}>
+                          <Text as="span" variant="bodySm">Year</Text>
+                          <select id="momYear" defaultValue={new Date().getUTCFullYear().toString()} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
+                            {Array.from({ length: 6 }).map((_, i) => {
+                              const y = new Date().getUTCFullYear() - i;
+                              return <option key={y} value={y.toString()}>{y}</option>;
+                            })}
+                          </select>
                         </div>
-                      </div>
+                        <div style={{ minWidth: '140px' }}>
+                          <Text as="span" variant="bodySm">Month A</Text>
+                          <select id="momMonthA" defaultValue="" style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
+                            <option value="">(auto-select)</option>
+                            {Array.from({ length: 12 }).map((_, idx) => {
+                              const m = idx + 1; const ml = new Date(Date.UTC(2000, idx, 1)).toLocaleString('en-US', { month: 'short' });
+                              return <option key={m} value={String(m).padStart(2,'0')}>{ml}</option>;
+                            })}
+                          </select>
+                        </div>
+                        <div style={{ minWidth: '140px' }}>
+                          <Text as="span" variant="bodySm">Month B</Text>
+                          <select id="momMonthB" defaultValue="" style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
+                            <option value="">(auto-select next)</option>
+                            {Array.from({ length: 12 }).map((_, idx) => {
+                              const m = idx + 1; const ml = new Date(Date.UTC(2000, idx, 1)).toLocaleString('en-US', { month: 'short' });
+                              return <option key={m} value={String(m).padStart(2,'0')}>{ml}</option>;
+                            })}
+                          </select>
+                        </div>
+                        <div style={{ alignSelf: 'flex-end' }}>
+                          <div onClick={() => {
+                            const year = (document.getElementById('momYear') as HTMLSelectElement | null)?.value || '';
+                            const ma = (document.getElementById('momMonthA') as HTMLSelectElement | null)?.value || '';
+                            const mb = (document.getElementById('momMonthB') as HTMLSelectElement | null)?.value || '';
+                            const a = ma ? `${year}-${ma}` : '';
+                            const b = mb ? `${year}-${mb}` : '';
+                            const scope = (filters?.compareScope as string) || 'aggregate';
+                            applyPatch({ view: 'compare', compare: 'mom', compareScope: scope, momA: a, momB: b });
+                          }} style={{
+                            padding: '10px 20px',
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                            color: 'white',
+                            cursor: isNavLoading ? 'not-allowed' : 'pointer',
+                            fontWeight: '600',
+                            fontSize: '14px',
+                            border: 'none',
+                            transition: 'all 0.3s ease',
+                            opacity: isNavLoading ? 0.6 : 1,
+                            boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
+                          }}>
+                            Update Comparison
+                          </div>
+                        </div>
                       </InlineStack>
                     </div>
                   </div>
