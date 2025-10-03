@@ -200,8 +200,8 @@ export default function AnalyticsPage() {
   // Fallback just for YoY + By Product: if client/server headers miss, derive from current inputs
   const productYoyHeadingsFallback: string[] | null = (() => {
     if (filters?.compare === 'yoy' && filters?.compareScope === 'product') {
-      const a = filters.yoyA || (document.getElementById('yoyA') as HTMLInputElement | null)?.value || '';
-      const b = filters.yoyB || (document.getElementById('yoyB') as HTMLInputElement | null)?.value || '';
+      const a = filters.yoyA || '';
+      const b = filters.yoyB || '';
       if (a && b) {
         const la = monthLabelClient(a);
         const lb = monthLabelClient(b);
