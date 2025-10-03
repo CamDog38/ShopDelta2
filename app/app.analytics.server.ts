@@ -117,6 +117,27 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     // For MoM UI
     let momMonths: Array<{ key: string; label: string }> | undefined = undefined;
+    // For YoY UI (broad selectable month lists)
+    const monthLabel = (y: number, m1to12: number) => {
+      const d = new Date(Date.UTC(y, m1to12 - 1, 1));
+      return `${d.toLocaleString("en-US", { month: "short" })} ${y}`;
+    };
+    const genBroadMonths = () => {
+      const months: Array<{ key: string; label: string }> = [];
+      const nowY = utcNow.getUTCFullYear();
+      const startY = nowY - 5; // last 5 years
+      const start = new Date(Date.UTC(startY, 0, 1));
+      const end = new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), 1));
+      const cur = new Date(start);
+      while (cur <= end) {
+        const y = cur.getUTCFullYear();
+        const m = cur.getUTCMonth() + 1;
+        const key = `${y}-${String(m).padStart(2, '0')}`;
+        months.push({ key, label: monthLabel(y, m) });
+        cur.setUTCMonth(cur.getUTCMonth() + 1);
+      }
+      return months;
+    };
     // Build search term for processedAt range
     const search = `processed_at:>='${start!.toISOString()}' processed_at:<='${end!.toISOString()}'`;
     dlog("Fetching recent orders... shop=", session.shop, "range=", start, end, "gran=", granParam);
@@ -283,8 +304,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let comparison: any = null;
     let comparisonTable: Array<Record<string, any>> | null = null;
     let comparisonHeaders: string[] | null = null;
-    let yoyPrevMonths: Array<{ key: string; label: string }> | undefined = undefined;
-    let yoyCurrMonths: Array<{ key: string; label: string }> | undefined = undefined;
+    let yoyPrevMonths: Array<{ key: string; label: string }> | undefined = genBroadMonths();
+    let yoyCurrMonths: Array<{ key: string; label: string }> | undefined = genBroadMonths();
     if (compareMode === "mom" || compareMode === "yoy") {
       let prevStart: Date, prevEnd: Date;
       if (compareMode === "yoy") {
@@ -426,25 +447,46 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               acc.qty += q; acc.sales += amt;
             }
           }
-          // Build month pick lists
-          yoyCurrMonths = Array.from(monthlyCurr.entries())
-            .sort((a,b)=> (a[0] > b[0] ? 1 : -1))
-            .map(([k,v]) => ({ key: k, label: v.label }));
-          yoyPrevMonths = Array.from(monthlyPrev.entries())
-            .map(([k]) => {
-              const [y, mm] = k.split('-').map((x)=>parseInt(x,10));
-              const d = new Date(Date.UTC(y, mm-1, 1));
-              return { key: k, label: `${d.toLocaleString('en-US', { month: 'short' })} ${y}` };
-            })
-            .sort((a,b)=> (a.key > b.key ? 1 : -1));
-
+          // Keep broad lists; do not restrict to in-range months
           comparisonHeaders = ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]; 
           const rows: Array<Record<string, any>> = [];
-          if (yoyA && yoyB && monthlyPrev.has(yoyA) && monthlyCurr.has(yoyB)) {
-            const curr = monthlyCurr.get(yoyB)!;
-            const prev = monthlyPrev.get(yoyA)!;
+          if (yoyA && yoyB) {
+            // Fetch exact months independently of the selected range
+            const parseYM = (k: string) => { const [y, m] = k.split('-').map((x)=>parseInt(x,10)); return { y, m }; };
+            const monthRange = (y: number, m1to12: number) => {
+              const s = new Date(Date.UTC(y, m1to12 - 1, 1));
+              const e = new Date(Date.UTC(y, m1to12, 0, 23, 59, 59, 999));
+              return { s, e };
+            };
+            const fetchTotals = async (s: Date, e: Date) => {
+              const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
+              let after: string | null = null; let qty = 0; let sales = 0; let currency: string | null = null;
+              while (true) {
+                const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
+                const data = await res.json();
+                const edges = (data as any)?.data?.orders?.edges ?? [];
+                for (const ed of edges) {
+                  const liEdges = ed?.node?.lineItems?.edges ?? [];
+                  for (const li of liEdges) {
+                    const q = li?.node?.quantity ?? 0; qty += q;
+                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                    const amt = amountStr ? parseFloat(amountStr) : 0; sales += amt;
+                    const curr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.currencyCode as any;
+                    if (!currency && curr) currency = curr;
+                  }
+                }
+                const page = (data as any)?.data?.orders;
+                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
+              }
+              return { qty, sales, currency };
+            };
+            const { y: yA, m: mA } = parseYM(yoyA);
+            const { y: yB, m: mB } = parseYM(yoyB);
+            const ra = monthRange(yA, mA); const rb = monthRange(yB, mB);
+            const prev = await fetchTotals(ra.s, ra.e);
+            const curr = await fetchTotals(rb.s, rb.e);
             rows.push({
-              period: `${curr.label} vs ${yoyPrevMonths.find(m=>m.key===yoyA)?.label || yoyA}`,
+              period: `${monthLabel(yB, mB)} vs ${monthLabel(yA, mA)}`,
               qtyCurr: curr.qty,
               qtyPrev: prev.qty,
               qtyDelta: curr.qty - prev.qty,
@@ -608,6 +650,68 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
           let aMap = (yoyA && monthlyPrevProd.has(yoyA)) ? monthlyPrevProd.get(yoyA)! : undefined;
           let bMap = (yoyB && monthlyCurrProd.has(yoyB)) ? monthlyCurrProd.get(yoyB)! : undefined;
+
+          // If explicit months were provided but not present in in-range maps, fetch those months directly
+          if (yoyA && !aMap) {
+            const [y, mm] = yoyA.split('-').map((x)=>parseInt(x,10));
+            const s = new Date(Date.UTC(y, mm-1, 1));
+            const e = new Date(Date.UTC(y, mm, 0, 23,59,59,999));
+            const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
+            const mp = new Map<string, { title: string; qty: number; sales: number }>();
+            let after: string | null = null;
+            while (true) {
+              const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
+              const data = await res.json();
+              const edges = (data as any)?.data?.orders?.edges ?? [];
+              for (const ed of edges) {
+                const liEdges = ed?.node?.lineItems?.edges ?? [];
+                for (const li of liEdges) {
+                  const qty = li?.node?.quantity ?? 0;
+                  const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                  const amt = amountStr ? parseFloat(amountStr) : 0;
+                  const p = li?.node?.product;
+                  const fallbackTitle: string = li?.node?.title ?? 'Unknown product';
+                  const pid: string = p?.id ?? `li:${fallbackTitle}`;
+                  const ptitle: string = p?.title ?? fallbackTitle;
+                  if (!mp.has(pid)) mp.set(pid, { title: ptitle, qty: 0, sales: 0 });
+                  const acc = mp.get(pid)!; acc.qty += qty; acc.sales += amt;
+                }
+              }
+              const page = (data as any)?.data?.orders;
+              if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
+            }
+            aMap = mp;
+          }
+          if (yoyB && !bMap) {
+            const [y, mm] = yoyB.split('-').map((x)=>parseInt(x,10));
+            const s = new Date(Date.UTC(y, mm-1, 1));
+            const e = new Date(Date.UTC(y, mm, 0, 23,59,59,999));
+            const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
+            const mp = new Map<string, { title: string; qty: number; sales: number }>();
+            let after: string | null = null;
+            while (true) {
+              const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
+              const data = await res.json();
+              const edges = (data as any)?.data?.orders?.edges ?? [];
+              for (const ed of edges) {
+                const liEdges = ed?.node?.lineItems?.edges ?? [];
+                for (const li of liEdges) {
+                  const qty = li?.node?.quantity ?? 0;
+                  const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                  const amt = amountStr ? parseFloat(amountStr) : 0;
+                  const p = li?.node?.product;
+                  const fallbackTitle: string = li?.node?.title ?? 'Unknown product';
+                  const pid: string = p?.id ?? `li:${fallbackTitle}`;
+                  const ptitle: string = p?.title ?? fallbackTitle;
+                  if (!mp.has(pid)) mp.set(pid, { title: ptitle, qty: 0, sales: 0 });
+                  const acc = mp.get(pid)!; acc.qty += qty; acc.sales += amt;
+                }
+              }
+              const page = (data as any)?.data?.orders;
+              if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
+            }
+            bMap = mp;
+          }
 
           // Fallback: if no selection, compare whole current period vs whole previous period aggregated by product
           if (!aMap || !bMap) {

@@ -1080,28 +1080,20 @@ export default function AnalyticsPage() {
                     <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
                     <div style={{ marginTop: '8px' }}>
                       <InlineStack gap="200" wrap>
-                        <div style={{ minWidth: '160px' }}>
-                          <Text as="span" variant="bodySm">Previous Year Month</Text>
-                          <select id="yoyA" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
-                            <option value="">(auto-match)</option>
-                            {yoyPrevMonths.map((m) => (
-                              <option key={m.key} value={m.key}>{m.label}</option>
-                            ))}
-                          </select>
+                        <div style={{ minWidth: '180px' }}>
+                          <Text as="span" variant="bodySm">Month A</Text>
+                          <input id="yoyA" type="month" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+                          <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
                         </div>
-                        <div style={{ minWidth: '160px' }}>
-                          <Text as="span" variant="bodySm">Current Year Month</Text>
-                          <select id="yoyB" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
-                            <option value="">(auto-match)</option>
-                            {yoyCurrMonths.map((m) => (
-                              <option key={m.key} value={m.key}>{m.label}</option>
-                            ))}
-                          </select>
+                        <div style={{ minWidth: '180px' }}>
+                          <Text as="span" variant="bodySm">Month B</Text>
+                          <input id="yoyB" type="month" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+                          <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
                         </div>
                         <div style={{ alignSelf: 'flex-end' }}>
                           <div onClick={() => {
-                            const a = (document.getElementById('yoyA') as HTMLSelectElement | null)?.value || '';
-                            const b = (document.getElementById('yoyB') as HTMLSelectElement | null)?.value || '';
+                            const a = (document.getElementById('yoyA') as HTMLInputElement | null)?.value || '';
+                            const b = (document.getElementById('yoyB') as HTMLInputElement | null)?.value || '';
                             const scope = (filters?.compareScope as string) || 'aggregate';
                             applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: a, yoyB: b });
                           }} style={{
