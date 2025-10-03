@@ -1,8 +1,8 @@
 import type { LinksFunction } from "@remix-run/node";
 import { useLoaderData, useLocation, useRouteError, useSubmit, useNavigation } from "@remix-run/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Page, DataTable, BlockStack, Text, Link, Button, InlineStack, Spinner } from "@shopify/polaris";
-import { TitleBar } from "@shopify/app-bridge-react";
+import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import analyticsStylesUrl from "./styles/analytics.css?url";
 import type { loader as analyticsLoader } from "./app.analytics.server";
 
@@ -50,6 +50,7 @@ export default function AnalyticsPage() {
   const navigation = useNavigation();
   const isNavLoading = navigation.state !== "idle";
   const [isExporting, setIsExporting] = useState(false);
+  const app = useAppBridge();
   // Handle known error cases with helpful actions
   const errType = (data as any).error as string | undefined;
   if (errType === "ACCESS_DENIED") {
@@ -95,6 +96,29 @@ export default function AnalyticsPage() {
       </Page>
     );
   }
+
+  // Surface loader errors with console logging and an App Bridge toast
+  useEffect(() => {
+    if (errType && errType !== "ACCESS_DENIED") {
+      try {
+        console.group("[Analytics] Loader error");
+        console.error("Type:", errType);
+        if ((data as any)?.message) console.error("Message:", (data as any).message);
+        if ((data as any)?.details) console.error("Details:", (data as any).details);
+        if ((data as any)?.filters) console.info("Filters:", (data as any).filters);
+        const f = (data as any)?.filters as any;
+        if (f?.compare) {
+          console.info("Compare:", f.compare, "Scope:", f.compareScope, "yoyMode:", (f as any)?.yoyMode, "momA:", f?.momA, "momB:", f?.momB, "yoyA:", f?.yoyA, "yoyB:", f?.yoyB);
+        }
+        console.groupEnd();
+      } catch (_) {}
+      try {
+        if (app && (app as any).toast?.show) {
+          (app as any).toast.show(`Analytics error: ${(data as any).message || errType}`);
+        }
+      } catch (_) {}
+    }
+  }, [app, errType]);
 
   const topProducts = Array.isArray((data as any).topProducts)
     ? ((data as any).topProducts as Array<{ id: string; title: string; quantity: number }>)
