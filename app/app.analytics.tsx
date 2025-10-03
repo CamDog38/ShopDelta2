@@ -778,55 +778,7 @@ export default function AnalyticsPage() {
                             ))
                       )}
 
-                {filters?.compare === 'yoy' && (
-                  <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '16px', borderRadius: '8px', marginTop: '12px' }}>
-                    <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
-                    <div style={{ marginTop: '8px' }}>
-                      <InlineStack gap="200" wrap>
-                        <div style={{ minWidth: '160px' }}>
-                          <Text as="span" variant="bodySm">Previous Year Month</Text>
-                          <select id="yoyA" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
-                            <option value="">(auto-match)</option>
-                            {yoyPrevMonths.map((m) => (
-                              <option key={m.key} value={m.key}>{m.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div style={{ minWidth: '160px' }}>
-                          <Text as="span" variant="bodySm">Current Year Month</Text>
-                          <select id="yoyB" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
-                            <option value="">(auto-match)</option>
-                            {yoyCurrMonths.map((m) => (
-                              <option key={m.key} value={m.key}>{m.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div style={{ alignSelf: 'flex-end' }}>
-                          <div onClick={() => {
-                            const a = (document.getElementById('yoyA') as HTMLSelectElement | null)?.value || '';
-                            const b = (document.getElementById('yoyB') as HTMLSelectElement | null)?.value || '';
-                            const scope = (filters?.compareScope as string) || 'aggregate';
-                            applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: a, yoyB: b });
-                          }} style={{
-                            padding: '10px 20px',
-                            borderRadius: '8px',
-                            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                            color: 'white',
-                            cursor: isNavLoading ? 'not-allowed' : 'pointer',
-                            fontWeight: '600',
-                            fontSize: '14px',
-                            border: 'none',
-                            transition: 'all 0.3s ease',
-                            opacity: isNavLoading ? 0.6 : 1,
-                            boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
-                          }}>
-                            Update YoY Comparison
-                          </div>
-                        </div>
-                      </InlineStack>
-                    </div>
-                  </div>
-                )}
+                
 
                       {chartType === "line" && (
                         <>
@@ -1119,6 +1071,55 @@ export default function AnalyticsPage() {
                           Update Comparison
                         </div>
                       </div>
+                      </InlineStack>
+                    </div>
+                  </div>
+                )}
+                {filters?.compare === 'yoy' && (
+                  <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '16px', borderRadius: '8px', marginTop: '12px' }}>
+                    <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
+                    <div style={{ marginTop: '8px' }}>
+                      <InlineStack gap="200" wrap>
+                        <div style={{ minWidth: '160px' }}>
+                          <Text as="span" variant="bodySm">Previous Year Month</Text>
+                          <select id="yoyA" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
+                            <option value="">(auto-match)</option>
+                            {yoyPrevMonths.map((m) => (
+                              <option key={m.key} value={m.key}>{m.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ minWidth: '160px' }}>
+                          <Text as="span" variant="bodySm">Current Year Month</Text>
+                          <select id="yoyB" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
+                            <option value="">(auto-match)</option>
+                            {yoyCurrMonths.map((m) => (
+                              <option key={m.key} value={m.key}>{m.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ alignSelf: 'flex-end' }}>
+                          <div onClick={() => {
+                            const a = (document.getElementById('yoyA') as HTMLSelectElement | null)?.value || '';
+                            const b = (document.getElementById('yoyB') as HTMLSelectElement | null)?.value || '';
+                            const scope = (filters?.compareScope as string) || 'aggregate';
+                            applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: a, yoyB: b });
+                          }} style={{
+                            padding: '10px 20px',
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                            color: 'white',
+                            cursor: isNavLoading ? 'not-allowed' : 'pointer',
+                            fontWeight: '600',
+                            fontSize: '14px',
+                            border: 'none',
+                            transition: 'all 0.3s ease',
+                            opacity: isNavLoading ? 0.6 : 1,
+                            boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
+                          }}>
+                            Update YoY Comparison
+                          </div>
+                        </div>
                       </InlineStack>
                     </div>
                   </div>
