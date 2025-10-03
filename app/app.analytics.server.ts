@@ -44,7 +44,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const momB = url.searchParams.get("momB");
   const yoyA = url.searchParams.get("yoyA"); // prev year month key YYYY-MM
   const yoyB = url.searchParams.get("yoyB"); // current year month key YYYY-MM
-  const yoyMode = url.searchParams.get("yoyMode") || ""; // ytd | year | month
   const chartType = url.searchParams.get("chart") || "bar"; // bar | line
   const chartMetric = (url.searchParams.get("metric") || "qty").toLowerCase(); // qty | sales
   const chartScope = (url.searchParams.get("chartScope") || "aggregate").toLowerCase(); // aggregate | product
@@ -521,130 +520,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           if (yoyA && yoyB) {
             const [ya, ma] = yoyA.split('-').map((x)=>parseInt(x,10));
             const [yb, mb] = yoyB.split('-').map((x)=>parseInt(x,10));
-            // For full-year mode, show year labels instead of month labels
-            if (yoyMode === 'year') {
-              comparisonHeaders = ["Period", `Qty (${yb})`, `Qty (${ya})`, "Qty Δ", "Qty Δ%", `Sales (${yb})`, `Sales (${ya})`, "Sales Δ", "Sales Δ%"];
-            } else {
-              const la = `${new Date(Date.UTC(ya, ma-1, 1)).toLocaleString('en-US',{month:'short'})} ${ya}`;
-              const lb = `${new Date(Date.UTC(yb, mb-1, 1)).toLocaleString('en-US',{month:'short'})} ${yb}`;
-              comparisonHeaders = ["Period", `Qty (${lb})`, `Qty (${la})`, "Qty Δ", "Qty Δ%", `Sales (${lb})`, `Sales (${la})`, "Sales Δ", "Sales Δ%"];
-            }
+            const la = `${new Date(Date.UTC(ya, ma-1, 1)).toLocaleString('en-US',{month:'short'})} ${ya}`;
+            const lb = `${new Date(Date.UTC(yb, mb-1, 1)).toLocaleString('en-US',{month:'short'})} ${yb}`;
+            comparisonHeaders = ["Period", `Qty (${lb})`, `Qty (${la})`, "Qty Δ", "Qty Δ%", `Sales (${lb})`, `Sales (${la})`, "Sales Δ", "Sales Δ%"];
           } else {
             comparisonHeaders = ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]; 
           }
           const rows: Array<Record<string, any>> = [];
-          if (yoyA && yoyB && yoyMode === 'year') {
-            // Full year comparison: fetch entire years and show month-by-month breakdown
-            const parseYM = (k: string) => { const [y, m] = k.split('-').map((x)=>parseInt(x,10)); return { y, m }; };
-            const { y: yA } = parseYM(yoyA);
-            const { y: yB } = parseYM(yoyB);
-            
-            // Fetch full year A (paginate)
-            const yearAStart = new Date(Date.UTC(yA, 0, 1));
-            const yearAEnd = new Date(Date.UTC(yA, 11, 31, 23, 59, 59, 999));
-            const searchA = `processed_at:>='${yearAStart.toISOString()}' processed_at:<='${yearAEnd.toISOString()}'`;
-            const monthlyA = new Map<string, { qty: number; sales: number }>();
-            {
-              let after: string | null = null;
-              while (true) {
-                const res: Response = await admin.graphql(query, { variables: { first: 250, search: searchA, after } });
-                const data: any = await res.json();
-                if ((res as any)?.status && (res as any).status >= 400) {
-                  throw new Error(`GraphQL status ${ (res as any).status } while fetching full-year A`);
-                }
-                const gqlErrors = (data && (data as any).errors) || (data && (data as any).data && (data as any).data.errors);
-                if (gqlErrors && Array.isArray(gqlErrors) && gqlErrors.length > 0) {
-                  throw new Error(gqlErrors[0]?.message || 'GraphQL error in full-year A');
-                }
-                const edges: any[] = data?.data?.orders?.edges ?? [];
-                for (const e of edges) {
-                  const d = new Date(e?.node?.processedAt);
-                  const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-                  if (!monthlyA.has(mKey)) monthlyA.set(mKey, { qty: 0, sales: 0 });
-                  const liEdges = e?.node?.lineItems?.edges ?? [];
-                  for (const li of liEdges) {
-                    const q = li?.node?.quantity ?? 0;
-                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-                    const amt = amountStr ? parseFloat(amountStr) : 0;
-                    const acc = monthlyA.get(mKey)!; acc.qty += q; acc.sales += amt;
-                  }
-                }
-                const page: any = data?.data?.orders;
-                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-              }
-            }
-
-            // Fetch full year B (paginate)
-            const yearBStart = new Date(Date.UTC(yB, 0, 1));
-            const yearBEnd = new Date(Date.UTC(yB, 11, 31, 23, 59, 59, 999));
-            const searchB = `processed_at:>='${yearBStart.toISOString()}' processed_at:<='${yearBEnd.toISOString()}'`;
-            const monthlyB = new Map<string, { qty: number; sales: number }>();
-            {
-              let after: string | null = null;
-              while (true) {
-                const res: Response = await admin.graphql(query, { variables: { first: 250, search: searchB, after } });
-                const data: any = await res.json();
-                if ((res as any)?.status && (res as any).status >= 400) {
-                  throw new Error(`GraphQL status ${ (res as any).status } while fetching full-year B`);
-                }
-                const gqlErrors = (data && (data as any).errors) || (data && (data as any).data && (data as any).data.errors);
-                if (gqlErrors && Array.isArray(gqlErrors) && gqlErrors.length > 0) {
-                  throw new Error(gqlErrors[0]?.message || 'GraphQL error in full-year B');
-                }
-                const edges: any[] = data?.data?.orders?.edges ?? [];
-                for (const e of edges) {
-                  const d = new Date(e?.node?.processedAt);
-                  const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-                  if (!monthlyB.has(mKey)) monthlyB.set(mKey, { qty: 0, sales: 0 });
-                  const liEdges = e?.node?.lineItems?.edges ?? [];
-                  for (const li of liEdges) {
-                    const q = li?.node?.quantity ?? 0;
-                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-                    const amt = amountStr ? parseFloat(amountStr) : 0;
-                    const acc = monthlyB.get(mKey)!; acc.qty += q; acc.sales += amt;
-                  }
-                }
-                const page = (data as any)?.data?.orders;
-                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-              }
-            }
-
-            // Build month-by-month comparison
-            for (let m = 1; m <= 12; m++) {
-              const keyA = `${yA}-${String(m).padStart(2,'0')}`;
-              const keyB = `${yB}-${String(m).padStart(2,'0')}`;
-              const prevData = monthlyA.get(keyA) || { qty: 0, sales: 0 };
-              const currData = monthlyB.get(keyB) || { qty: 0, sales: 0 };
-              const monthName = new Date(Date.UTC(2000, m-1, 1)).toLocaleString('en-US', { month: 'short' });
-              rows.push({
-                period: monthName,
-                qtyCurr: currData.qty,
-                qtyPrev: prevData.qty,
-                qtyDelta: currData.qty - prevData.qty,
-                qtyDeltaPct: prevData.qty ? (((currData.qty - prevData.qty) / prevData.qty) * 100) : null,
-                salesCurr: currData.sales,
-                salesPrev: prevData.sales,
-                salesDelta: currData.sales - prevData.sales,
-                salesDeltaPct: prevData.sales ? (((currData.sales - prevData.sales) / prevData.sales) * 100) : null,
-              });
-            }
-
-            // Calculate totals for comparison summary
-            const totA = Array.from(monthlyA.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
-            const totB = Array.from(monthlyB.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
-            comparison = {
-              mode: compareMode,
-              current: { qty: totB.qty, sales: totB.sales },
-              previous: { qty: totA.qty, sales: totA.sales },
-              deltas: {
-                qty: totB.qty - totA.qty,
-                qtyPct: totA.qty ? (((totB.qty - totA.qty) / totA.qty) * 100) : null,
-                sales: totB.sales - totA.sales,
-                salesPct: totA.sales ? (((totB.sales - totA.sales) / totA.sales) * 100) : null,
-              },
-              prevRange: { start: fmtYMD(yearAStart), end: fmtYMD(yearAEnd) },
-            };
-          } else if (yoyA && yoyB) {
+          if (yoyA && yoyB) {
             // Fetch exact months independently of the selected range
             const parseYM = (k: string) => { const [y, m] = k.split('-').map((x)=>parseInt(x,10)); return { y, m }; };
             const monthRange = (y: number, m1to12: number) => {
@@ -703,86 +586,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               salesDelta: curr.sales - prev.sales,
               salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
             });
-          } else if (!yoyA && !yoyB && (yoyMode === 'ytd' || !yoyMode)) {
-            // YTD mode: Jan..current month of current year vs Jan..current month of previous year
-            const currYear = utcNow.getUTCFullYear();
-            const currMonthIdx = utcNow.getUTCMonth(); // 0-based
-            const ytdStartCurr = new Date(Date.UTC(currYear, 0, 1));
-            const ytdEndCurr = new Date(Date.UTC(currYear, currMonthIdx + 1, 0, 23, 59, 59, 999));
-            const ytdStartPrev = new Date(Date.UTC(currYear - 1, 0, 1));
-            const ytdEndPrev = new Date(Date.UTC(currYear - 1, currMonthIdx + 1, 0, 23, 59, 59, 999));
-
-            const monthlyCurrYTD = new Map<string, { qty: number; sales: number }>();
-            const monthlyPrevYTD = new Map<string, { qty: number; sales: number }>();
-
-            const buildMonthly = async (s: Date, e: Date, dest: Map<string, { qty: number; sales: number }>) => {
-              const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
-              let after: string | null = null;
-              while (true) {
-                const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
-                const data: any = await res.json();
-                const edges: any[] = data?.data?.orders?.edges ?? [];
-                for (const ed of edges) {
-                  const d = new Date(ed?.node?.processedAt);
-                  const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-                  if (!dest.has(mKey)) dest.set(mKey, { qty: 0, sales: 0 });
-                  const liEdges = ed?.node?.lineItems?.edges ?? [];
-                  for (const li of liEdges) {
-                    const q = li?.node?.quantity ?? 0;
-                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-                    const amt = amountStr ? parseFloat(amountStr) : 0;
-                    const acc = dest.get(mKey)!; acc.qty += q; acc.sales += amt;
-                  }
-                }
-                const page: any = data?.data?.orders;
-                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-              }
-            };
-
-            await buildMonthly(ytdStartPrev, ytdEndPrev, monthlyPrevYTD);
-            await buildMonthly(ytdStartCurr, ytdEndCurr, monthlyCurrYTD);
-
-            // Headings show the years
-            comparisonHeaders = [
-              "Period",
-              `Qty (${currYear})`, `Qty (${currYear - 1})`, "Qty Δ", "Qty Δ%",
-              `Sales (${currYear})`, `Sales (${currYear - 1})`, "Sales Δ", "Sales Δ%",
-            ];
-
-            for (let m = 1; m <= currMonthIdx + 1; m++) {
-              const keyCurr = `${currYear}-${String(m).padStart(2,'0')}`;
-              const keyPrev = `${currYear - 1}-${String(m).padStart(2,'0')}`;
-              const c = monthlyCurrYTD.get(keyCurr) || { qty: 0, sales: 0 };
-              const p = monthlyPrevYTD.get(keyPrev) || { qty: 0, sales: 0 };
-              const monthName = new Date(Date.UTC(2000, m-1, 1)).toLocaleString('en-US', { month: 'short' });
-              rows.push({
-                period: monthName,
-                qtyCurr: c.qty,
-                qtyPrev: p.qty,
-                qtyDelta: c.qty - p.qty,
-                qtyDeltaPct: p.qty ? (((c.qty - p.qty) / p.qty) * 100) : null,
-                salesCurr: c.sales,
-                salesPrev: p.sales,
-                salesDelta: c.sales - p.sales,
-                salesDeltaPct: p.sales ? (((c.sales - p.sales) / p.sales) * 100) : null,
-              });
-            }
-
-            // Totals for summary
-            const totCurr = Array.from(monthlyCurrYTD.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
-            const totPrev = Array.from(monthlyPrevYTD.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
-            comparison = {
-              mode: compareMode,
-              current: { qty: totCurr.qty, sales: totCurr.sales },
-              previous: { qty: totPrev.qty, sales: totPrev.sales },
-              deltas: {
-                qty: totCurr.qty - totPrev.qty,
-                qtyPct: totPrev.qty ? (((totCurr.qty - totPrev.qty) / totPrev.qty) * 100) : null,
-                sales: totCurr.sales - totPrev.sales,
-                salesPct: totPrev.sales ? (((totCurr.sales - totPrev.sales) / totPrev.sales) * 100) : null,
-              },
-              prevRange: { start: fmtYMD(ytdStartPrev), end: fmtYMD(ytdEndPrev) },
-            };
           } else {
             const ordered = Array.from(monthlyCurr.entries()).sort((a,b)=> (a[0] > b[0] ? 1 : -1));
             for (const [mKey, curr] of ordered) {
@@ -1141,7 +944,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       seriesProductLines,
       productLegend: top5Ids.map((id) => ({ id, title: productSet.get(id)?.title || id, sku: productSet.get(id)?.sku || "" })),
       momMonths,
-      filters: { start: fmtYMD(start!), end: fmtYMD(end!), granularity: granParam, preset, view, compare: compareMode, chart: chartType, metric: chartMetric, chartScope, compareScope, productFocus, momA: momA || undefined, momB: momB || undefined, yoyA: yoyA || undefined, yoyB: yoyB || undefined, yoyMode: yoyMode || undefined },
+      filters: { start: fmtYMD(start!), end: fmtYMD(end!), granularity: granParam, preset, view, compare: compareMode, chart: chartType, metric: chartMetric, chartScope, compareScope, productFocus, momA: momA || undefined, momB: momB || undefined, yoyA: yoyA || undefined, yoyB: yoyB || undefined },
       shop: session.shop,
       yoyPrevMonths,
       yoyCurrMonths,

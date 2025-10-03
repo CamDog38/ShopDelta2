@@ -1,8 +1,8 @@
 import type { LinksFunction } from "@remix-run/node";
 import { useLoaderData, useLocation, useRouteError, useSubmit, useNavigation } from "@remix-run/react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Page, DataTable, BlockStack, Text, Link, Button, InlineStack, Spinner } from "@shopify/polaris";
-import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
+import { TitleBar } from "@shopify/app-bridge-react";
 import analyticsStylesUrl from "./styles/analytics.css?url";
 import type { loader as analyticsLoader } from "./app.analytics.server";
 
@@ -50,7 +50,6 @@ export default function AnalyticsPage() {
   const navigation = useNavigation();
   const isNavLoading = navigation.state !== "idle";
   const [isExporting, setIsExporting] = useState(false);
-  const app = useAppBridge();
   // Handle known error cases with helpful actions
   const errType = (data as any).error as string | undefined;
   if (errType === "ACCESS_DENIED") {
@@ -97,36 +96,13 @@ export default function AnalyticsPage() {
     );
   }
 
-  // Surface loader errors with console logging and an App Bridge toast
-  useEffect(() => {
-    if (errType && errType !== "ACCESS_DENIED") {
-      try {
-        console.group("[Analytics] Loader error");
-        console.error("Type:", errType);
-        if ((data as any)?.message) console.error("Message:", (data as any).message);
-        if ((data as any)?.details) console.error("Details:", (data as any).details);
-        if ((data as any)?.filters) console.info("Filters:", (data as any).filters);
-        const f = (data as any)?.filters as any;
-        if (f?.compare) {
-          console.info("Compare:", f.compare, "Scope:", f.compareScope, "yoyMode:", (f as any)?.yoyMode, "momA:", f?.momA, "momB:", f?.momB, "yoyA:", f?.yoyA, "yoyB:", f?.yoyB);
-        }
-        console.groupEnd();
-      } catch (_) {}
-      try {
-        if (app && (app as any).toast?.show) {
-          (app as any).toast.show(`Analytics error: ${(data as any).message || errType}`);
-        }
-      } catch (_) {}
-    }
-  }, [app, errType]);
-
   const topProducts = Array.isArray((data as any).topProducts)
     ? ((data as any).topProducts as Array<{ id: string; title: string; quantity: number }>)
     : [];
   const series = Array.isArray((data as any).series)
     ? ((data as any).series as Array<{ key: string; label: string; quantity: number; sales: number }>)
     : [];
-  type Filters = { start: string; end: string; granularity: string; preset: string; view?: string; compare?: string; chart?: string; compareScope?: string; metric?: string; chartScope?: string; productFocus?: string; momA?: string; momB?: string; yoyA?: string; yoyB?: string; yoyMode?: string };
+  type Filters = { start: string; end: string; granularity: string; preset: string; view?: string; compare?: string; chart?: string; compareScope?: string; metric?: string; chartScope?: string; productFocus?: string; momA?: string; momB?: string; yoyA?: string; yoyB?: string };
   const filters = (data as any).filters as Filters | undefined;
   const topBySales = Array.isArray((data as any).topProductsBySales)
     ? ((data as any).topProductsBySales as Array<{ id: string; title: string; sales: number }>)
@@ -200,8 +176,8 @@ export default function AnalyticsPage() {
         ];
       }
     }
-    // YoY explicit months
-    if (filters.compare === 'yoy' && filters.yoyA && filters.yoyB && filters.yoyMode !== 'year') {
+    // YoY explicit
+    if (filters.compare === 'yoy' && filters.yoyA && filters.yoyB) {
       const la = monthLabelClient(filters.yoyA);
       const lb = monthLabelClient(filters.yoyB);
       if (filters.compareScope === 'product') {
@@ -218,58 +194,12 @@ export default function AnalyticsPage() {
         ];
       }
     }
-    // YoY full-year
-    if (filters.compare === 'yoy' && filters.yoyMode === 'year' && (filters.yoyA || filters.yoyB)) {
-      const yA = (filters.yoyA || '').split('-')[0] || '';
-      const yB = (filters.yoyB || '').split('-')[0] || '';
-      if (filters.compareScope === 'product') {
-        return [
-          `Product (${yA} → ${yB})`,
-          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
-          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
-        ];
-      } else {
-        return [
-          'Period',
-          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
-          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
-        ];
-      }
-    }
-    // YoY YTD
-    if (filters.compare === 'yoy' && filters.yoyMode === 'ytd') {
-      const now = new Date();
-      const yB = now.getUTCFullYear();
-      const yA = yB - 1;
-      if (filters.compareScope === 'product') {
-        return [
-          `Product (${yA} → ${yB})`,
-          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
-          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
-        ];
-      } else {
-        return [
-          'Period',
-          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
-          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
-        ];
-      }
-    }
     return null;
   })();
 
   // Fallback just for YoY + By Product: if client/server headers miss, derive from current inputs
   const productYoyHeadingsFallback: string[] | null = (() => {
     if (filters?.compare === 'yoy' && filters?.compareScope === 'product') {
-      if (filters.yoyMode === 'year' && (filters.yoyA || filters.yoyB)) {
-        const yA = (filters.yoyA || '').split('-')[0] || '';
-        const yB = (filters.yoyB || '').split('-')[0] || '';
-        return [
-          `Product (${yA} → ${yB})`,
-          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
-          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
-        ];
-      }
       const a = filters.yoyA || '';
       const b = filters.yoyB || '';
       if (a && b) {
@@ -334,33 +264,17 @@ export default function AnalyticsPage() {
     const form = e?.currentTarget ?? (document.getElementById("filters-form") as HTMLFormElement | null);
     if (!form) return;
     const formData = new FormData(form);
-    // Preserve Shopify embed params
-    const qs = new URLSearchParams(location.search);
-    const host = qs.get("host");
-    const embedded = qs.get("embedded");
-    if (host) formData.set("host", host);
-    if (embedded) formData.set("embedded", embedded);
     submit(formData, { method: "get" });
   };
   const changeView = (view: string) => {
-    if (isNavLoading) return;
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
-    const qs = new URLSearchParams(location.search);
-    const host = qs.get("host"); const embedded = qs.get("embedded");
-    if (host) fd.set("host", host);
-    if (embedded) fd.set("embedded", embedded);
     fd.set("view", view);
     submit(fd, { method: "get" });
   };
   const changeChart = (type: string) => {
-    if (isNavLoading) return;
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
-    const qs = new URLSearchParams(location.search);
-    const host = qs.get("host"); const embedded = qs.get("embedded");
-    if (host) fd.set("host", host);
-    if (embedded) fd.set("embedded", embedded);
     fd.set("view", "chart");
     fd.set("chart", type);
     if (!(fd.get("metric"))) fd.set("metric", (filters?.metric as string) || "qty");
@@ -368,25 +282,15 @@ export default function AnalyticsPage() {
     submit(fd, { method: "get" });
   };
   const changeCompare = (mode: string) => {
-    if (isNavLoading) return;
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
-    const qs = new URLSearchParams(location.search);
-    const host = qs.get("host"); const embedded = qs.get("embedded");
-    if (host) fd.set("host", host);
-    if (embedded) fd.set("embedded", embedded);
     fd.set("compare", mode);
     fd.set("view", "compare");
     submit(fd, { method: "get" });
   };
   const applyPatch = (patch: Record<string, string>) => {
-    if (isNavLoading) return;
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
-    const qs = new URLSearchParams(location.search);
-    const host = qs.get("host"); const embedded = qs.get("embedded");
-    if (host) fd.set("host", host);
-    if (embedded) fd.set("embedded", embedded);
     for (const [k, v] of Object.entries(patch)) fd.set(k, v);
     submit(fd, { method: "get" });
   };
@@ -396,11 +300,6 @@ export default function AnalyticsPage() {
     setIsExporting(true);
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
-    // Preserve Shopify embed params
-    const qs = new URLSearchParams(location.search);
-    const host = qs.get("host"); const embedded = qs.get("embedded");
-    if (host) fd.set("host", host);
-    if (embedded) fd.set("embedded", embedded);
     // Ensure compare/momA/momB/compareScope persist
     if (!fd.get("view")) fd.set("view", filters?.view || "chart");
     if (!fd.get("compare")) fd.set("compare", filters?.compare || "none");
@@ -409,7 +308,6 @@ export default function AnalyticsPage() {
     if (filters?.momB) fd.set("momB", filters.momB);
     if (filters?.yoyA) fd.set("yoyA", filters.yoyA);
     if (filters?.yoyB) fd.set("yoyB", filters.yoyB);
-    if (filters?.yoyMode) fd.set("yoyMode", filters.yoyMode);
     const params = new URLSearchParams();
     for (const [k, v] of fd.entries()) {
       if (typeof v === "string" && v !== "") params.set(k, v);
@@ -461,9 +359,6 @@ export default function AnalyticsPage() {
             <input type="hidden" name="metric" defaultValue={filters?.metric ?? "qty"} />
             <input type="hidden" name="chartScope" defaultValue={filters?.chartScope ?? "aggregate"} />
             <input type="hidden" name="productFocus" defaultValue={filters?.productFocus ?? "all"} />
-            {/* Preserve Shopify embed params across GET submissions */}
-            <input type="hidden" name="host" defaultValue={new URLSearchParams(location.search).get('host') ?? ''} />
-            <input type="hidden" name="embedded" defaultValue={new URLSearchParams(location.search).get('embedded') ?? '1'} />
             <InlineStack gap="300" wrap align="end">
               <div style={{ minWidth: '140px' }}>
                 <Text as="span" variant="bodySm" tone="subdued">Time Period</Text>
@@ -1156,7 +1051,7 @@ export default function AnalyticsPage() {
                     }}>
                       <InlineStack gap="100">
                         <div
-                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'aggregate', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '', yoyMode: (filters as any)?.yoyMode || '' })}
+                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'aggregate', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '' })}
                           style={{
                             padding: '8px 16px',
                             borderRadius: '6px',
@@ -1177,7 +1072,7 @@ export default function AnalyticsPage() {
                           📊 Overall Totals
                         </div>
                         <div
-                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'product', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '', yoyMode: (filters as any)?.yoyMode || '' })}
+                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'product', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '' })}
                           style={{
                             padding: '8px 16px',
                             borderRadius: '6px',
@@ -1266,204 +1161,42 @@ export default function AnalyticsPage() {
                   </div>
                 )}
                 {filters?.compare === 'yoy' && (
-                  <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '20px', borderRadius: '8px', marginTop: '12px' }}>
-                    <Text as="h4" variant="headingSm" tone="subdued">Year-over-Year Comparison Options</Text>
-                    <div style={{ marginTop: '4px', marginBottom: '16px' }}>
-                      <Text as="p" variant="bodyXs" tone="subdued">
-                        Choose how to compare: YTD vs YTD, full years, or specific months
-                      </Text>
+                  <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '16px', borderRadius: '8px', marginTop: '12px' }}>
+                    <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
+                    <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'end' }}>
+                      <div style={{ minWidth: '180px' }}>
+                        <Text as="span" variant="bodySm">Month A</Text>
+                        <input id="yoyA" type="month" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+                        <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
+                      </div>
+                      <div style={{ minWidth: '180px' }}>
+                        <Text as="span" variant="bodySm">Month B</Text>
+                        <input id="yoyB" type="month" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+                        <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
+                      </div>
+                      <div>
+                        <div onClick={() => {
+                          const a = (document.getElementById('yoyA') as HTMLInputElement | null)?.value || '';
+                          const b = (document.getElementById('yoyB') as HTMLInputElement | null)?.value || '';
+                          const scope = (filters?.compareScope as string) || 'aggregate';
+                          applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: a, yoyB: b });
+                        }} style={{
+                          padding: '10px 20px',
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                          color: 'white',
+                          cursor: isNavLoading ? 'not-allowed' : 'pointer',
+                          fontWeight: '600',
+                          fontSize: '14px',
+                          border: 'none',
+                          transition: 'all 0.3s ease',
+                          opacity: isNavLoading ? 0.6 : 1,
+                          boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
+                        }}>
+                          Update YoY Comparison
+                        </div>
+                      </div>
                     </div>
-                    
-                    {/* Mode selector */}
-                    <div style={{ 
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-                      padding: '3px', 
-                      borderRadius: '8px',
-                      marginBottom: '16px',
-                      display: 'inline-flex'
-                    }}>
-                      <InlineStack gap="100">
-                        <div 
-                          onClick={() => {
-                            const scope = (filters?.compareScope as string) || 'aggregate';
-                            applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: '', yoyB: '', yoyMode: 'ytd' });
-                          }}
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: '6px',
-                            background: (!filters?.yoyA && !filters?.yoyB) || (filters as any)?.yoyMode === 'ytd'
-                              ? 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' 
-                              : 'rgba(255, 255, 255, 0.1)',
-                            color: 'white',
-                            cursor: isNavLoading ? 'not-allowed' : 'pointer',
-                            fontWeight: '600',
-                            fontSize: '13px',
-                            transition: 'all 0.3s ease',
-                            opacity: isNavLoading ? 0.6 : 1,
-                            boxShadow: (!filters?.yoyA && !filters?.yoyB) || (filters as any)?.yoyMode === 'ytd'
-                              ? '0 2px 8px rgba(79, 172, 254, 0.4)' 
-                              : 'none'
-                          }}
-                        >
-                          📅 YTD Comparison
-                        </div>
-                        <div 
-                          onClick={() => {
-                            // Set mode to year - will show year selectors
-                            const scope = (filters?.compareScope as string) || 'aggregate';
-                            applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyMode: 'year' });
-                          }}
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: '6px',
-                            background: (filters as any)?.yoyMode === 'year'
-                              ? 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' 
-                              : 'rgba(255, 255, 255, 0.1)',
-                            color: 'white',
-                            cursor: isNavLoading ? 'not-allowed' : 'pointer',
-                            fontWeight: '600',
-                            fontSize: '13px',
-                            transition: 'all 0.3s ease',
-                            opacity: isNavLoading ? 0.6 : 1,
-                            boxShadow: (filters as any)?.yoyMode === 'year'
-                              ? '0 2px 8px rgba(79, 172, 254, 0.4)' 
-                              : 'none'
-                          }}
-                        >
-                          📆 Full Year
-                        </div>
-                        <div 
-                          onClick={() => {
-                            const scope = (filters?.compareScope as string) || 'aggregate';
-                            applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyMode: 'month' });
-                          }}
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: '6px',
-                            background: (filters as any)?.yoyMode === 'month' || (filters?.yoyA && filters?.yoyB)
-                              ? 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' 
-                              : 'rgba(255, 255, 255, 0.1)',
-                            color: 'white',
-                            cursor: isNavLoading ? 'not-allowed' : 'pointer',
-                            fontWeight: '600',
-                            fontSize: '13px',
-                            transition: 'all 0.3s ease',
-                            opacity: isNavLoading ? 0.6 : 1,
-                            boxShadow: (filters as any)?.yoyMode === 'month' || (filters?.yoyA && filters?.yoyB)
-                              ? '0 2px 8px rgba(79, 172, 254, 0.4)' 
-                              : 'none'
-                          }}
-                        >
-                          📊 Specific Months
-                        </div>
-                      </InlineStack>
-                    </div>
-
-                    {/* YTD mode - no inputs needed */}
-                    {((!filters?.yoyA && !filters?.yoyB && !(filters as any)?.yoyMode) || (filters as any)?.yoyMode === 'ytd') && (
-                      <div style={{ background: 'rgba(79, 172, 254, 0.1)', padding: '12px', borderRadius: '6px', marginTop: '12px' }}>
-                        <Text as="p" variant="bodySm">
-                          📊 <strong>Year-to-Date Comparison</strong><br/>
-                          Comparing current year-to-date vs previous year-to-date (month-by-month breakdown + totals)
-                        </Text>
-                      </div>
-                    )}
-
-                    {/* Full year mode */}
-                    {(filters as any)?.yoyMode === 'year' && (
-                      <div style={{ marginTop: '12px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'end' }}>
-                          <div>
-                            <Text as="span" variant="bodySm">Year A (Previous)</Text>
-                            <select 
-                              id="yoyYearA" 
-                              defaultValue={filters?.yoyA?.split('-')[0] || String(new Date().getUTCFullYear() - 1)}
-                              style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
-                            >
-                              {Array.from({ length: 10 }).map((_, i) => {
-                                const y = new Date().getUTCFullYear() - i;
-                                return <option key={y} value={y}>{y}</option>;
-                              })}
-                            </select>
-                          </div>
-                          <div>
-                            <Text as="span" variant="bodySm">Year B (Current)</Text>
-                            <select 
-                              id="yoyYearB" 
-                              defaultValue={filters?.yoyB?.split('-')[0] || String(new Date().getUTCFullYear())}
-                              style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
-                            >
-                              {Array.from({ length: 10 }).map((_, i) => {
-                                const y = new Date().getUTCFullYear() - i;
-                                return <option key={y} value={y}>{y}</option>;
-                              })}
-                            </select>
-                          </div>
-                          <div>
-                            <div onClick={() => {
-                              const ya = (document.getElementById('yoyYearA') as HTMLSelectElement | null)?.value || '';
-                              const yb = (document.getElementById('yoyYearB') as HTMLSelectElement | null)?.value || '';
-                              const scope = (filters?.compareScope as string) || 'aggregate';
-                              applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: `${ya}-01`, yoyB: `${yb}-12`, yoyMode: 'year' });
-                            }} style={{
-                              padding: '10px 20px',
-                              borderRadius: '8px',
-                              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                              color: 'white',
-                              cursor: isNavLoading ? 'not-allowed' : 'pointer',
-                              fontWeight: '600',
-                              fontSize: '14px',
-                              border: 'none',
-                              transition: 'all 0.3s ease',
-                              opacity: isNavLoading ? 0.6 : 1,
-                              boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
-                            }}>
-                              Compare Years
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Specific month mode */}
-                    {(filters as any)?.yoyMode === 'month' && (
-                      <div style={{ marginTop: '12px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'end' }}>
-                          <div style={{ minWidth: '180px' }}>
-                            <Text as="span" variant="bodySm">Month A</Text>
-                            <input id="yoyA" type="month" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
-                            <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
-                          </div>
-                          <div style={{ minWidth: '180px' }}>
-                            <Text as="span" variant="bodySm">Month B</Text>
-                            <input id="yoyB" type="month" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
-                            <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
-                          </div>
-                          <div>
-                            <div onClick={() => {
-                              const a = (document.getElementById('yoyA') as HTMLInputElement | null)?.value || '';
-                              const b = (document.getElementById('yoyB') as HTMLInputElement | null)?.value || '';
-                              const scope = (filters?.compareScope as string) || 'aggregate';
-                              applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: a, yoyB: b, yoyMode: 'month' });
-                            }} style={{
-                              padding: '10px 20px',
-                              borderRadius: '8px',
-                              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                              color: 'white',
-                              cursor: isNavLoading ? 'not-allowed' : 'pointer',
-                              fontWeight: '600',
-                              fontSize: '14px',
-                              border: 'none',
-                              transition: 'all 0.3s ease',
-                              opacity: isNavLoading ? 0.6 : 1,
-                              boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
-                            }}>
-                              Compare Months
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
                 
@@ -1538,12 +1271,7 @@ export default function AnalyticsPage() {
                     <div style={{ marginBottom: '20px' }}>
                       <Text as="h3" variant="headingMd">📆 Year-over-Year Comparison</Text>
                       <Text as="p" variant="bodySm" tone="subdued">
-                        {(() => {
-                          const mode = (filters as any)?.yoyMode;
-                          if (mode === 'year') return 'Comparing each month across the selected years (e.g., Jan–Dec 2025 vs Jan–Dec 2024)';
-                          if (mode === 'ytd' || (!mode && !filters?.yoyA && !filters?.yoyB)) return 'Comparing current year-to-date vs previous year-to-date, month-by-month';
-                          return 'Comparing your selected month vs the same month last year';
-                        })()}
+                        Comparing each month in your selected period vs the same month in the previous year (e.g., Jan 2025 vs Jan 2024, Feb 2025 vs Feb 2024)
                       </Text>
                     </div>
                     
@@ -1564,21 +1292,9 @@ export default function AnalyticsPage() {
                             const d = new Date(Date.UTC(y, mm - 1, 1));
                             return `${d.toLocaleString('en-US', { month: 'short' })} ${y}`;
                           };
-                          const mode = (filters as any)?.yoyMode;
-                          let summaryRange = `${filters?.start} to ${filters?.end}`;
-                          if (mode === 'year' && (filters?.yoyA || filters?.yoyB)) {
-                            const yA = (filters?.yoyA || '').split('-')[0] || '';
-                            const yB = (filters?.yoyB || '').split('-')[0] || '';
-                            summaryRange = `${yB} vs ${yA}`;
-                          } else if (filters?.yoyA && filters?.yoyB) {
-                            summaryRange = `${monthLabel(filters.yoyB)} vs ${monthLabel(filters.yoyA)}`;
-                          } else if (mode === 'ytd' || (!mode && !filters?.yoyA && !filters?.yoyB)) {
-                            const now = new Date();
-                            const currYear = now.getUTCFullYear();
-                            const currMonth = now.getUTCMonth();
-                            const ml = new Date(Date.UTC(2000, currMonth, 1)).toLocaleString('en-US', { month: 'short' });
-                            summaryRange = `Jan ${currYear}–${ml} ${currYear} vs Jan ${currYear-1}–${ml} ${currYear-1}`;
-                          }
+                          const summaryRange = (filters?.yoyA && filters?.yoyB)
+                            ? `${monthLabel(filters.yoyB)} vs ${monthLabel(filters.yoyA)}`
+                            : `${filters?.start} to ${filters?.end}`;
                           return (
                             <div style={{ color: 'white', marginBottom: '16px' }}>
                               <Text as="h4" variant="headingSm">
