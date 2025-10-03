@@ -73,6 +73,7 @@ export default function AnalyticsPage() {
       // Fallback: navigate current frame
       window.location.assign(reauthUrl);
     };
+
     return (
       <Page>
         <TitleBar title="Analytics" />
@@ -143,6 +144,42 @@ export default function AnalyticsPage() {
   const yoyCurrMonths = Array.isArray((data as any).yoyCurrMonths)
     ? ((data as any).yoyCurrMonths as Array<{ key: string; label: string }>)
     : [];
+
+  // Build comparison headings on client when explicit months are selected
+  const monthLabelClient = (ym?: string) => {
+    if (!ym) return '';
+    const parts = ym.split('-');
+    if (parts.length !== 2) return ym;
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (!y || !m) return ym;
+    const d = new Date(Date.UTC(y, m - 1, 1));
+    return `${d.toLocaleString('en-US', { month: 'short' })} ${y}`;
+  };
+  const clientComparisonHeaders: string[] | null = (() => {
+    if (!filters) return null;
+    // MoM explicit
+    if ((!filters.compare || filters.compare === 'mom') && filters.momA && filters.momB) {
+      const la = monthLabelClient(filters.momA);
+      const lb = monthLabelClient(filters.momB);
+      return [
+        'Period',
+        `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
+        `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
+      ];
+    }
+    // YoY explicit
+    if (filters.compare === 'yoy' && filters.yoyA && filters.yoyB) {
+      const la = monthLabelClient(filters.yoyA);
+      const lb = monthLabelClient(filters.yoyB);
+      return [
+        'Period',
+        `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
+        `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
+      ];
+    }
+    return null;
+  })();
 
   // Table data (for Table view)
   const headers = Array.isArray((data as any).headers)
@@ -1092,7 +1129,7 @@ export default function AnalyticsPage() {
                 {filters?.compare === 'yoy' && (
                   <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '16px', borderRadius: '8px', marginTop: '12px' }}>
                     <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
-                    <div style={{ marginTop: '8px' }}>
+                    <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'end' }}>
                       <InlineStack gap="200" wrap>
                         <div style={{ minWidth: '180px' }}>
                           <Text as="span" variant="bodySm">Month A</Text>
@@ -1104,7 +1141,7 @@ export default function AnalyticsPage() {
                           <input id="yoyB" type="month" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
                           <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
                         </div>
-                        <div style={{ alignSelf: 'flex-end' }}>
+                        <div>
                           <div onClick={() => {
                             const a = (document.getElementById('yoyA') as HTMLInputElement | null)?.value || '';
                             const b = (document.getElementById('yoyB') as HTMLInputElement | null)?.value || '';
@@ -1182,7 +1219,7 @@ export default function AnalyticsPage() {
                     </div>
                     <DataTable
                       columnContentTypes={["text","numeric","numeric","numeric","text","numeric","numeric","numeric","text"]}
-                      headings={["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]}
+                      headings={clientComparisonHeaders || comparisonHeaders || ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]}
                       rows={((data as any).comparisonTable as any[]).map((r: any) => [
                         r.period,
                         fmtNum(r.qtyCurr),
@@ -1302,7 +1339,7 @@ export default function AnalyticsPage() {
                     {Array.isArray((data as any).comparisonTable) && (data as any).comparisonTable.length > 0 && !("metric" in (data as any).comparisonTable[0]) ? (
                       <DataTable
                         columnContentTypes={["text","numeric","numeric","numeric","text","numeric","numeric","numeric","text"]}
-                        headings={comparisonHeaders || ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]}
+                        headings={clientComparisonHeaders || comparisonHeaders || ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]}
                         rows={(data as any).comparisonTable.map((r: any) => [
                           r.period,
                           fmtNum(r.qtyCurr),
