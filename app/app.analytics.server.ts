@@ -533,161 +533,66 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             comparisonHeaders = ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]; 
           }
           const rows: Array<Record<string, any>> = [];
-          if (!yoyA && !yoyB && (!yoyMode || yoyMode === 'ytd')) {
-            // YTD mode: Compare Jan-CurrentMonth of current year vs same period last year
-            const currYear = utcNow.getUTCFullYear();
-            const currMonth = utcNow.getUTCMonth() + 1; // 1-12
-            const prevYear = currYear - 1;
-            
-            // Fetch current YTD
-            const ytdCurrStart = new Date(Date.UTC(currYear, 0, 1));
-            const ytdCurrEnd = new Date(Date.UTC(currYear, currMonth - 1, utcNow.getUTCDate(), 23, 59, 59, 999));
-            const searchCurr = `processed_at:>='${ytdCurrStart.toISOString()}' processed_at:<='${ytdCurrEnd.toISOString()}'`;
-            let afterCurr: string | null = null;
-            const monthlyCurrYTD = new Map<string, { qty: number; sales: number }>();
-            while (true) {
-              const res = await admin.graphql(query, { variables: { first: 250, search: searchCurr, after: afterCurr } });
-              const data = await res.json();
-              const edges = (data as any)?.data?.orders?.edges ?? [];
-              for (const e of edges) {
-                const d = new Date(e?.node?.processedAt);
-                const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-                if (!monthlyCurrYTD.has(mKey)) monthlyCurrYTD.set(mKey, { qty: 0, sales: 0 });
-                const liEdges = e?.node?.lineItems?.edges ?? [];
-                for (const li of liEdges) {
-                  const q = li?.node?.quantity ?? 0;
-                  const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-                  const amt = amountStr ? parseFloat(amountStr) : 0;
-                  const acc = monthlyCurrYTD.get(mKey)!;
-                  acc.qty += q; acc.sales += amt;
-                }
-              }
-              const page = (data as any)?.data?.orders;
-              if (page?.pageInfo?.hasNextPage) afterCurr = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-            }
-
-            // Fetch previous YTD
-            const ytdPrevStart = new Date(Date.UTC(prevYear, 0, 1));
-            const ytdPrevEnd = new Date(Date.UTC(prevYear, currMonth - 1, utcNow.getUTCDate(), 23, 59, 59, 999));
-            const searchPrev = `processed_at:>='${ytdPrevStart.toISOString()}' processed_at:<='${ytdPrevEnd.toISOString()}'`;
-            let afterPrev: string | null = null;
-            const monthlyPrevYTD = new Map<string, { qty: number; sales: number }>();
-            while (true) {
-              const res = await admin.graphql(query, { variables: { first: 250, search: searchPrev, after: afterPrev } });
-              const data = await res.json();
-              const edges = (data as any)?.data?.orders?.edges ?? [];
-              for (const e of edges) {
-                const d = new Date(e?.node?.processedAt);
-                const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-                if (!monthlyPrevYTD.has(mKey)) monthlyPrevYTD.set(mKey, { qty: 0, sales: 0 });
-                const liEdges = e?.node?.lineItems?.edges ?? [];
-                for (const li of liEdges) {
-                  const q = li?.node?.quantity ?? 0;
-                  const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-                  const amt = amountStr ? parseFloat(amountStr) : 0;
-                  const acc = monthlyPrevYTD.get(mKey)!;
-                  acc.qty += q; acc.sales += amt;
-                }
-              }
-              const page = (data as any)?.data?.orders;
-              if (page?.pageInfo?.hasNextPage) afterPrev = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-            }
-
-            // Build month-by-month YTD comparison
-            for (let m = 1; m <= currMonth; m++) {
-              const keyCurr = `${currYear}-${String(m).padStart(2,'0')}`;
-              const keyPrev = `${prevYear}-${String(m).padStart(2,'0')}`;
-              const currData = monthlyCurrYTD.get(keyCurr) || { qty: 0, sales: 0 };
-              const prevData = monthlyPrevYTD.get(keyPrev) || { qty: 0, sales: 0 };
-              const monthName = new Date(Date.UTC(2000, m-1, 1)).toLocaleString('en-US', { month: 'short' });
-              const label = `${monthName} ${currYear}`;
-              rows.push({
-                period: label,
-                qtyCurr: currData.qty,
-                qtyPrev: prevData.qty,
-                qtyDelta: currData.qty - prevData.qty,
-                qtyDeltaPct: prevData.qty ? (((currData.qty - prevData.qty) / prevData.qty) * 100) : null,
-                salesCurr: currData.sales,
-                salesPrev: prevData.sales,
-                salesDelta: currData.sales - prevData.sales,
-                salesDeltaPct: prevData.sales ? (((currData.sales - prevData.sales) / prevData.sales) * 100) : null,
-              });
-            }
-
-            // Calculate totals
-            const totCurr = Array.from(monthlyCurrYTD.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
-            const totPrev = Array.from(monthlyPrevYTD.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
-            comparison = {
-              mode: compareMode,
-              current: { qty: totCurr.qty, sales: totCurr.sales },
-              previous: { qty: totPrev.qty, sales: totPrev.sales },
-              deltas: {
-                qty: totCurr.qty - totPrev.qty,
-                qtyPct: totPrev.qty ? (((totCurr.qty - totPrev.qty) / totPrev.qty) * 100) : null,
-                sales: totCurr.sales - totPrev.sales,
-                salesPct: totPrev.sales ? (((totCurr.sales - totPrev.sales) / totPrev.sales) * 100) : null,
-              },
-              prevRange: { start: fmtYMD(ytdPrevStart), end: fmtYMD(ytdPrevEnd) },
-            };
-            comparisonHeaders = ["Period",`Qty (${currYear})`,`Qty (${prevYear})`,"Qty Δ","Qty Δ%",`Sales (${currYear})`,`Sales (${prevYear})`,"Sales Δ","Sales Δ%"];
-          } else if (yoyA && yoyB && yoyMode === 'year') {
+          if (yoyA && yoyB && yoyMode === 'year') {
             // Full year comparison: fetch entire years and show month-by-month breakdown
             const parseYM = (k: string) => { const [y, m] = k.split('-').map((x)=>parseInt(x,10)); return { y, m }; };
             const { y: yA } = parseYM(yoyA);
             const { y: yB } = parseYM(yoyB);
             
-            // Fetch full year A with pagination
+            // Fetch full year A (paginate)
             const yearAStart = new Date(Date.UTC(yA, 0, 1));
             const yearAEnd = new Date(Date.UTC(yA, 11, 31, 23, 59, 59, 999));
             const searchA = `processed_at:>='${yearAStart.toISOString()}' processed_at:<='${yearAEnd.toISOString()}'`;
-            let afterA: string | null = null;
             const monthlyA = new Map<string, { qty: number; sales: number }>();
-            while (true) {
-              const res = await admin.graphql(query, { variables: { first: 250, search: searchA, after: afterA } });
-              const data = await res.json();
-              const edges = (data as any)?.data?.orders?.edges ?? [];
-              for (const e of edges) {
-                const d = new Date(e?.node?.processedAt);
-                const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-                if (!monthlyA.has(mKey)) monthlyA.set(mKey, { qty: 0, sales: 0 });
-                const liEdges = e?.node?.lineItems?.edges ?? [];
-                for (const li of liEdges) {
-                  const q = li?.node?.quantity ?? 0;
-                  const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-                  const amt = amountStr ? parseFloat(amountStr) : 0;
-                  const acc = monthlyA.get(mKey)!;
-                  acc.qty += q; acc.sales += amt;
+            {
+              let after: string | null = null;
+              while (true) {
+                const res: Response = await admin.graphql(query, { variables: { first: 250, search: searchA, after } });
+                const data: any = await res.json();
+                const edges: any[] = data?.data?.orders?.edges ?? [];
+                for (const e of edges) {
+                  const d = new Date(e?.node?.processedAt);
+                  const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+                  if (!monthlyA.has(mKey)) monthlyA.set(mKey, { qty: 0, sales: 0 });
+                  const liEdges = e?.node?.lineItems?.edges ?? [];
+                  for (const li of liEdges) {
+                    const q = li?.node?.quantity ?? 0;
+                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                    const amt = amountStr ? parseFloat(amountStr) : 0;
+                    const acc = monthlyA.get(mKey)!; acc.qty += q; acc.sales += amt;
+                  }
                 }
+                const page: any = data?.data?.orders;
+                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
               }
-              const page = (data as any)?.data?.orders;
-              if (page?.pageInfo?.hasNextPage) afterA = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
             }
 
-            // Fetch full year B with pagination
+            // Fetch full year B (paginate)
             const yearBStart = new Date(Date.UTC(yB, 0, 1));
             const yearBEnd = new Date(Date.UTC(yB, 11, 31, 23, 59, 59, 999));
             const searchB = `processed_at:>='${yearBStart.toISOString()}' processed_at:<='${yearBEnd.toISOString()}'`;
-            let afterB: string | null = null;
             const monthlyB = new Map<string, { qty: number; sales: number }>();
-            while (true) {
-              const res = await admin.graphql(query, { variables: { first: 250, search: searchB, after: afterB } });
-              const data = await res.json();
-              const edges = (data as any)?.data?.orders?.edges ?? [];
-              for (const e of edges) {
-                const d = new Date(e?.node?.processedAt);
-                const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-                if (!monthlyB.has(mKey)) monthlyB.set(mKey, { qty: 0, sales: 0 });
-                const liEdges = e?.node?.lineItems?.edges ?? [];
-                for (const li of liEdges) {
-                  const q = li?.node?.quantity ?? 0;
-                  const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-                  const amt = amountStr ? parseFloat(amountStr) : 0;
-                  const acc = monthlyB.get(mKey)!;
-                  acc.qty += q; acc.sales += amt;
+            {
+              let after: string | null = null;
+              while (true) {
+                const res: Response = await admin.graphql(query, { variables: { first: 250, search: searchB, after } });
+                const data: any = await res.json();
+                const edges: any[] = data?.data?.orders?.edges ?? [];
+                for (const e of edges) {
+                  const d = new Date(e?.node?.processedAt);
+                  const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+                  if (!monthlyB.has(mKey)) monthlyB.set(mKey, { qty: 0, sales: 0 });
+                  const liEdges = e?.node?.lineItems?.edges ?? [];
+                  for (const li of liEdges) {
+                    const q = li?.node?.quantity ?? 0;
+                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                    const amt = amountStr ? parseFloat(amountStr) : 0;
+                    const acc = monthlyB.get(mKey)!; acc.qty += q; acc.sales += amt;
+                  }
                 }
+                const page = (data as any)?.data?.orders;
+                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
               }
-              const page = (data as any)?.data?.orders;
-              if (page?.pageInfo?.hasNextPage) afterB = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
             }
 
             // Build month-by-month comparison
@@ -784,6 +689,86 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               salesDelta: curr.sales - prev.sales,
               salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
             });
+          } else if (!yoyA && !yoyB && (yoyMode === 'ytd' || !yoyMode)) {
+            // YTD mode: Jan..current month of current year vs Jan..current month of previous year
+            const currYear = utcNow.getUTCFullYear();
+            const currMonthIdx = utcNow.getUTCMonth(); // 0-based
+            const ytdStartCurr = new Date(Date.UTC(currYear, 0, 1));
+            const ytdEndCurr = new Date(Date.UTC(currYear, currMonthIdx + 1, 0, 23, 59, 59, 999));
+            const ytdStartPrev = new Date(Date.UTC(currYear - 1, 0, 1));
+            const ytdEndPrev = new Date(Date.UTC(currYear - 1, currMonthIdx + 1, 0, 23, 59, 59, 999));
+
+            const monthlyCurrYTD = new Map<string, { qty: number; sales: number }>();
+            const monthlyPrevYTD = new Map<string, { qty: number; sales: number }>();
+
+            const buildMonthly = async (s: Date, e: Date, dest: Map<string, { qty: number; sales: number }>) => {
+              const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
+              let after: string | null = null;
+              while (true) {
+                const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
+                const data: any = await res.json();
+                const edges: any[] = data?.data?.orders?.edges ?? [];
+                for (const ed of edges) {
+                  const d = new Date(ed?.node?.processedAt);
+                  const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+                  if (!dest.has(mKey)) dest.set(mKey, { qty: 0, sales: 0 });
+                  const liEdges = ed?.node?.lineItems?.edges ?? [];
+                  for (const li of liEdges) {
+                    const q = li?.node?.quantity ?? 0;
+                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                    const amt = amountStr ? parseFloat(amountStr) : 0;
+                    const acc = dest.get(mKey)!; acc.qty += q; acc.sales += amt;
+                  }
+                }
+                const page: any = data?.data?.orders;
+                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
+              }
+            };
+
+            await buildMonthly(ytdStartPrev, ytdEndPrev, monthlyPrevYTD);
+            await buildMonthly(ytdStartCurr, ytdEndCurr, monthlyCurrYTD);
+
+            // Headings show the years
+            comparisonHeaders = [
+              "Period",
+              `Qty (${currYear})`, `Qty (${currYear - 1})`, "Qty Δ", "Qty Δ%",
+              `Sales (${currYear})`, `Sales (${currYear - 1})`, "Sales Δ", "Sales Δ%",
+            ];
+
+            for (let m = 1; m <= currMonthIdx + 1; m++) {
+              const keyCurr = `${currYear}-${String(m).padStart(2,'0')}`;
+              const keyPrev = `${currYear - 1}-${String(m).padStart(2,'0')}`;
+              const c = monthlyCurrYTD.get(keyCurr) || { qty: 0, sales: 0 };
+              const p = monthlyPrevYTD.get(keyPrev) || { qty: 0, sales: 0 };
+              const monthName = new Date(Date.UTC(2000, m-1, 1)).toLocaleString('en-US', { month: 'short' });
+              rows.push({
+                period: monthName,
+                qtyCurr: c.qty,
+                qtyPrev: p.qty,
+                qtyDelta: c.qty - p.qty,
+                qtyDeltaPct: p.qty ? (((c.qty - p.qty) / p.qty) * 100) : null,
+                salesCurr: c.sales,
+                salesPrev: p.sales,
+                salesDelta: c.sales - p.sales,
+                salesDeltaPct: p.sales ? (((c.sales - p.sales) / p.sales) * 100) : null,
+              });
+            }
+
+            // Totals for summary
+            const totCurr = Array.from(monthlyCurrYTD.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
+            const totPrev = Array.from(monthlyPrevYTD.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
+            comparison = {
+              mode: compareMode,
+              current: { qty: totCurr.qty, sales: totCurr.sales },
+              previous: { qty: totPrev.qty, sales: totPrev.sales },
+              deltas: {
+                qty: totCurr.qty - totPrev.qty,
+                qtyPct: totPrev.qty ? (((totCurr.qty - totPrev.qty) / totPrev.qty) * 100) : null,
+                sales: totCurr.sales - totPrev.sales,
+                salesPct: totPrev.sales ? (((totCurr.sales - totPrev.sales) / totPrev.sales) * 100) : null,
+              },
+              prevRange: { start: fmtYMD(ytdStartPrev), end: fmtYMD(ytdEndPrev) },
+            };
           } else {
             const ordered = Array.from(monthlyCurr.entries()).sort((a,b)=> (a[0] > b[0] ? 1 : -1));
             for (const [mKey, curr] of ordered) {

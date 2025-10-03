@@ -176,8 +176,8 @@ export default function AnalyticsPage() {
         ];
       }
     }
-    // YoY explicit
-    if (filters.compare === 'yoy' && filters.yoyA && filters.yoyB) {
+    // YoY explicit months
+    if (filters.compare === 'yoy' && filters.yoyA && filters.yoyB && filters.yoyMode !== 'year') {
       const la = monthLabelClient(filters.yoyA);
       const lb = monthLabelClient(filters.yoyB);
       if (filters.compareScope === 'product') {
@@ -194,12 +194,58 @@ export default function AnalyticsPage() {
         ];
       }
     }
+    // YoY full-year
+    if (filters.compare === 'yoy' && filters.yoyMode === 'year' && (filters.yoyA || filters.yoyB)) {
+      const yA = (filters.yoyA || '').split('-')[0] || '';
+      const yB = (filters.yoyB || '').split('-')[0] || '';
+      if (filters.compareScope === 'product') {
+        return [
+          `Product (${yA} → ${yB})`,
+          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      } else {
+        return [
+          'Period',
+          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      }
+    }
+    // YoY YTD
+    if (filters.compare === 'yoy' && filters.yoyMode === 'ytd') {
+      const now = new Date();
+      const yB = now.getUTCFullYear();
+      const yA = yB - 1;
+      if (filters.compareScope === 'product') {
+        return [
+          `Product (${yA} → ${yB})`,
+          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      } else {
+        return [
+          'Period',
+          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      }
+    }
     return null;
   })();
 
   // Fallback just for YoY + By Product: if client/server headers miss, derive from current inputs
   const productYoyHeadingsFallback: string[] | null = (() => {
     if (filters?.compare === 'yoy' && filters?.compareScope === 'product') {
+      if (filters.yoyMode === 'year' && (filters.yoyA || filters.yoyB)) {
+        const yA = (filters.yoyA || '').split('-')[0] || '';
+        const yB = (filters.yoyB || '').split('-')[0] || '';
+        return [
+          `Product (${yA} → ${yB})`,
+          `Qty (${yB})`, `Qty (${yA})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${yB})`, `Sales (${yA})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      }
       const a = filters.yoyA || '';
       const b = filters.yoyB || '';
       if (a && b) {
@@ -1052,7 +1098,7 @@ export default function AnalyticsPage() {
                     }}>
                       <InlineStack gap="100">
                         <div
-                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'aggregate', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '' })}
+                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'aggregate', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '', yoyMode: (filters as any)?.yoyMode || '' })}
                           style={{
                             padding: '8px 16px',
                             borderRadius: '6px',
@@ -1073,7 +1119,7 @@ export default function AnalyticsPage() {
                           📊 Overall Totals
                         </div>
                         <div
-                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'product', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '' })}
+                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'product', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '', yoyMode: (filters as any)?.yoyMode || '' })}
                           style={{
                             padding: '8px 16px',
                             borderRadius: '6px',
@@ -1434,7 +1480,12 @@ export default function AnalyticsPage() {
                     <div style={{ marginBottom: '20px' }}>
                       <Text as="h3" variant="headingMd">📆 Year-over-Year Comparison</Text>
                       <Text as="p" variant="bodySm" tone="subdued">
-                        Comparing each month in your selected period vs the same month in the previous year (e.g., Jan 2025 vs Jan 2024, Feb 2025 vs Feb 2024)
+                        {(() => {
+                          const mode = (filters as any)?.yoyMode;
+                          if (mode === 'year') return 'Comparing each month across the selected years (e.g., Jan–Dec 2025 vs Jan–Dec 2024)';
+                          if (mode === 'ytd' || (!mode && !filters?.yoyA && !filters?.yoyB)) return 'Comparing current year-to-date vs previous year-to-date, month-by-month';
+                          return 'Comparing your selected month vs the same month last year';
+                        })()}
                       </Text>
                     </div>
                     
@@ -1455,9 +1506,21 @@ export default function AnalyticsPage() {
                             const d = new Date(Date.UTC(y, mm - 1, 1));
                             return `${d.toLocaleString('en-US', { month: 'short' })} ${y}`;
                           };
-                          const summaryRange = (filters?.yoyA && filters?.yoyB)
-                            ? `${monthLabel(filters.yoyB)} vs ${monthLabel(filters.yoyA)}`
-                            : `${filters?.start} to ${filters?.end}`;
+                          const mode = (filters as any)?.yoyMode;
+                          let summaryRange = `${filters?.start} to ${filters?.end}`;
+                          if (mode === 'year' && (filters?.yoyA || filters?.yoyB)) {
+                            const yA = (filters?.yoyA || '').split('-')[0] || '';
+                            const yB = (filters?.yoyB || '').split('-')[0] || '';
+                            summaryRange = `${yB} vs ${yA}`;
+                          } else if (filters?.yoyA && filters?.yoyB) {
+                            summaryRange = `${monthLabel(filters.yoyB)} vs ${monthLabel(filters.yoyA)}`;
+                          } else if (mode === 'ytd' || (!mode && !filters?.yoyA && !filters?.yoyB)) {
+                            const now = new Date();
+                            const currYear = now.getUTCFullYear();
+                            const currMonth = now.getUTCMonth();
+                            const ml = new Date(Date.UTC(2000, currMonth, 1)).toLocaleString('en-US', { month: 'short' });
+                            summaryRange = `Jan ${currYear}–${ml} ${currYear} vs Jan ${currYear-1}–${ml} ${currYear-1}`;
+                          }
                           return (
                             <div style={{ color: 'white', marginBottom: '16px' }}>
                               <Text as="h4" variant="headingSm">
