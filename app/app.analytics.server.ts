@@ -853,6 +853,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             }
             rows.sort((a, b) => (b.salesDelta as number) - (a.salesDelta as number));
             comparisonTable = rows.slice(0, 50);
+            // Set headers with generic labels when no explicit months were chosen
+            comparisonHeaders = [
+              "Product",
+              "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%",
+              "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%",
+            ];
           } else {
             const keys = new Set<string>([...Array.from(aMap.keys()), ...Array.from(bMap.keys())]);
             const rows: Array<Record<string, any>> = [];
@@ -890,6 +896,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             };
             rows.sort((x, y) => (y.salesDelta as number) - (x.salesDelta as number));
             comparisonTable = rows.slice(0, 100);
+            // Use explicit YoY months in headers when provided
+            const fmtYM = (ym?: string | null) => {
+              if (!ym) return '';
+              const [yy, mm] = ym.split('-').map((x)=>parseInt(x,10));
+              const d = new Date(Date.UTC(yy, mm-1, 1));
+              return `${d.toLocaleString('en-US',{ month: 'short' })} ${yy}`;
+            };
+            const la = fmtYM(yoyA);
+            const lb = fmtYM(yoyB);
+            if (la && lb) {
+              comparisonHeaders = [
+                `Product (${la} → ${lb})`,
+                `Qty (${lb})`, `Qty (${la})`, "Qty Δ", "Qty Δ%",
+                `Sales (${lb})`, `Sales (${la})`, "Sales Δ", "Sales Δ%",
+              ];
+            } else {
+              comparisonHeaders = [
+                "Product",
+                "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%",
+                "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%",
+              ];
+            }
           }
         }
       }
