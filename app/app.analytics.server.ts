@@ -549,6 +549,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               while (true) {
                 const res: Response = await admin.graphql(query, { variables: { first: 250, search: searchA, after } });
                 const data: any = await res.json();
+                if ((res as any)?.status && (res as any).status >= 400) {
+                  throw new Error(`GraphQL status ${ (res as any).status } while fetching full-year A`);
+                }
+                const gqlErrors = (data && (data as any).errors) || (data && (data as any).data && (data as any).data.errors);
+                if (gqlErrors && Array.isArray(gqlErrors) && gqlErrors.length > 0) {
+                  throw new Error(gqlErrors[0]?.message || 'GraphQL error in full-year A');
+                }
                 const edges: any[] = data?.data?.orders?.edges ?? [];
                 for (const e of edges) {
                   const d = new Date(e?.node?.processedAt);
@@ -577,6 +584,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               while (true) {
                 const res: Response = await admin.graphql(query, { variables: { first: 250, search: searchB, after } });
                 const data: any = await res.json();
+                if ((res as any)?.status && (res as any).status >= 400) {
+                  throw new Error(`GraphQL status ${ (res as any).status } while fetching full-year B`);
+                }
+                const gqlErrors = (data && (data as any).errors) || (data && (data as any).data && (data as any).data.errors);
+                if (gqlErrors && Array.isArray(gqlErrors) && gqlErrors.length > 0) {
+                  throw new Error(gqlErrors[0]?.message || 'GraphQL error in full-year B');
+                }
                 const edges: any[] = data?.data?.orders?.edges ?? [];
                 for (const e of edges) {
                   const d = new Date(e?.node?.processedAt);
