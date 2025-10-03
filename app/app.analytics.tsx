@@ -162,21 +162,37 @@ export default function AnalyticsPage() {
     if ((!filters.compare || filters.compare === 'mom') && filters.momA && filters.momB) {
       const la = monthLabelClient(filters.momA);
       const lb = monthLabelClient(filters.momB);
-      return [
-        'Period',
-        `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
-        `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
-      ];
+      if (filters.compareScope === 'product') {
+        return [
+          `Product (${la} → ${lb})`,
+          `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      } else {
+        return [
+          'Period',
+          `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      }
     }
     // YoY explicit
     if (filters.compare === 'yoy' && filters.yoyA && filters.yoyB) {
       const la = monthLabelClient(filters.yoyA);
       const lb = monthLabelClient(filters.yoyB);
-      return [
-        'Period',
-        `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
-        `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
-      ];
+      if (filters.compareScope === 'product') {
+        return [
+          `Product (${la} → ${lb})`,
+          `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      } else {
+        return [
+          'Period',
+          `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      }
     }
     return null;
   })();
@@ -1130,40 +1146,38 @@ export default function AnalyticsPage() {
                   <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '16px', borderRadius: '8px', marginTop: '12px' }}>
                     <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
                     <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'end' }}>
-                      <InlineStack gap="200" wrap>
-                        <div style={{ minWidth: '180px' }}>
-                          <Text as="span" variant="bodySm">Month A</Text>
-                          <input id="yoyA" type="month" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
-                          <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
+                      <div style={{ minWidth: '180px' }}>
+                        <Text as="span" variant="bodySm">Month A</Text>
+                        <input id="yoyA" type="month" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+                        <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
+                      </div>
+                      <div style={{ minWidth: '180px' }}>
+                        <Text as="span" variant="bodySm">Month B</Text>
+                        <input id="yoyB" type="month" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+                        <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
+                      </div>
+                      <div>
+                        <div onClick={() => {
+                          const a = (document.getElementById('yoyA') as HTMLInputElement | null)?.value || '';
+                          const b = (document.getElementById('yoyB') as HTMLInputElement | null)?.value || '';
+                          const scope = (filters?.compareScope as string) || 'aggregate';
+                          applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: a, yoyB: b });
+                        }} style={{
+                          padding: '10px 20px',
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                          color: 'white',
+                          cursor: isNavLoading ? 'not-allowed' : 'pointer',
+                          fontWeight: '600',
+                          fontSize: '14px',
+                          border: 'none',
+                          transition: 'all 0.3s ease',
+                          opacity: isNavLoading ? 0.6 : 1,
+                          boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
+                        }}>
+                          Update YoY Comparison
                         </div>
-                        <div style={{ minWidth: '180px' }}>
-                          <Text as="span" variant="bodySm">Month B</Text>
-                          <input id="yoyB" type="month" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
-                          <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
-                        </div>
-                        <div>
-                          <div onClick={() => {
-                            const a = (document.getElementById('yoyA') as HTMLInputElement | null)?.value || '';
-                            const b = (document.getElementById('yoyB') as HTMLInputElement | null)?.value || '';
-                            const scope = (filters?.compareScope as string) || 'aggregate';
-                            applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: a, yoyB: b });
-                          }} style={{
-                            padding: '10px 20px',
-                            borderRadius: '8px',
-                            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                            color: 'white',
-                            cursor: isNavLoading ? 'not-allowed' : 'pointer',
-                            fontWeight: '600',
-                            fontSize: '14px',
-                            border: 'none',
-                            transition: 'all 0.3s ease',
-                            opacity: isNavLoading ? 0.6 : 1,
-                            boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
-                          }}>
-                            Update YoY Comparison
-                          </div>
-                        </div>
-                      </InlineStack>
+                      </div>
                     </div>
                   </div>
                 )}
