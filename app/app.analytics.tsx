@@ -101,7 +101,7 @@ export default function AnalyticsPage() {
   const series = Array.isArray((data as any).series)
     ? ((data as any).series as Array<{ key: string; label: string; quantity: number; sales: number }>)
     : [];
-  type Filters = { start: string; end: string; granularity: string; preset: string; view?: string; compare?: string; chart?: string; compareScope?: string; metric?: string; chartScope?: string; productFocus?: string; momA?: string; momB?: string };
+  type Filters = { start: string; end: string; granularity: string; preset: string; view?: string; compare?: string; chart?: string; compareScope?: string; metric?: string; chartScope?: string; productFocus?: string; momA?: string; momB?: string; yoyA?: string; yoyB?: string };
   const filters = (data as any).filters as Filters | undefined;
   const topBySales = Array.isArray((data as any).topProductsBySales)
     ? ((data as any).topProductsBySales as Array<{ id: string; title: string; sales: number }>)
@@ -136,6 +136,12 @@ export default function AnalyticsPage() {
     : [];
   const momMonths = Array.isArray((data as any).momMonths)
     ? ((data as any).momMonths as Array<{ key: string; label: string }>)
+    : [];
+  const yoyPrevMonths = Array.isArray((data as any).yoyPrevMonths)
+    ? ((data as any).yoyPrevMonths as Array<{ key: string; label: string }>)
+    : [];
+  const yoyCurrMonths = Array.isArray((data as any).yoyCurrMonths)
+    ? ((data as any).yoyCurrMonths as Array<{ key: string; label: string }>)
     : [];
 
   // Table data (for Table view)
@@ -229,6 +235,8 @@ export default function AnalyticsPage() {
     if (!fd.get("compareScope")) fd.set("compareScope", filters?.compareScope || "aggregate");
     if (filters?.momA) fd.set("momA", filters.momA);
     if (filters?.momB) fd.set("momB", filters.momB);
+    if (filters?.yoyA) fd.set("yoyA", filters.yoyA);
+    if (filters?.yoyB) fd.set("yoyB", filters.yoyB);
     const params = new URLSearchParams();
     for (const [k, v] of fd.entries()) {
       if (typeof v === "string" && v !== "") params.set(k, v);
@@ -770,6 +778,56 @@ export default function AnalyticsPage() {
                             ))
                       )}
 
+                {filters?.compare === 'yoy' && (
+                  <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '16px', borderRadius: '8px', marginTop: '12px' }}>
+                    <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
+                    <div style={{ marginTop: '8px' }}>
+                      <InlineStack gap="200" wrap>
+                        <div style={{ minWidth: '160px' }}>
+                          <Text as="span" variant="bodySm">Previous Year Month</Text>
+                          <select id="yoyA" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
+                            <option value="">(auto-match)</option>
+                            {yoyPrevMonths.map((m) => (
+                              <option key={m.key} value={m.key}>{m.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ minWidth: '160px' }}>
+                          <Text as="span" variant="bodySm">Current Year Month</Text>
+                          <select id="yoyB" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
+                            <option value="">(auto-match)</option>
+                            {yoyCurrMonths.map((m) => (
+                              <option key={m.key} value={m.key}>{m.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ alignSelf: 'flex-end' }}>
+                          <div onClick={() => {
+                            const a = (document.getElementById('yoyA') as HTMLSelectElement | null)?.value || '';
+                            const b = (document.getElementById('yoyB') as HTMLSelectElement | null)?.value || '';
+                            const scope = (filters?.compareScope as string) || 'aggregate';
+                            applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: a, yoyB: b });
+                          }} style={{
+                            padding: '10px 20px',
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                            color: 'white',
+                            cursor: isNavLoading ? 'not-allowed' : 'pointer',
+                            fontWeight: '600',
+                            fontSize: '14px',
+                            border: 'none',
+                            transition: 'all 0.3s ease',
+                            opacity: isNavLoading ? 0.6 : 1,
+                            boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
+                          }}>
+                            Update YoY Comparison
+                          </div>
+                        </div>
+                      </InlineStack>
+                    </div>
+                  </div>
+                )}
+
                       {chartType === "line" && (
                         <>
                           {filters?.chartScope === 'product'
@@ -970,7 +1028,7 @@ export default function AnalyticsPage() {
                     }}>
                       <InlineStack gap="100">
                         <div
-                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'aggregate', momA: filters?.momA || '', momB: filters?.momB || '' })}
+                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'aggregate', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '' })}
                           style={{
                             padding: '8px 16px',
                             borderRadius: '6px',
@@ -991,7 +1049,7 @@ export default function AnalyticsPage() {
                           📊 Overall Totals
                         </div>
                         <div
-                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'product', momA: filters?.momA || '', momB: filters?.momB || '' })}
+                          onClick={() => applyPatch({ view: 'compare', compare: (filters?.compare as string) || 'mom', compareScope: 'product', momA: filters?.momA || '', momB: filters?.momB || '', yoyA: filters?.yoyA || '', yoyB: filters?.yoyB || '' })}
                           style={{
                             padding: '8px 16px',
                             borderRadius: '6px',

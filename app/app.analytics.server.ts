@@ -42,6 +42,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const compareScope = url.searchParams.get("compareScope") || "aggregate"; // aggregate | product
   const momA = url.searchParams.get("momA");
   const momB = url.searchParams.get("momB");
+  const yoyA = url.searchParams.get("yoyA"); // prev year month key YYYY-MM
+  const yoyB = url.searchParams.get("yoyB"); // current year month key YYYY-MM
   const chartType = url.searchParams.get("chart") || "bar"; // bar | line
   const chartMetric = (url.searchParams.get("metric") || "qty").toLowerCase(); // qty | sales
   const chartScope = (url.searchParams.get("chartScope") || "aggregate").toLowerCase(); // aggregate | product
@@ -281,6 +283,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let comparison: any = null;
     let comparisonTable: Array<Record<string, any>> | null = null;
     let comparisonHeaders: string[] | null = null;
+    let yoyPrevMonths: Array<{ key: string; label: string }> | undefined = undefined;
+    let yoyCurrMonths: Array<{ key: string; label: string }> | undefined = undefined;
     if (compareMode === "mom" || compareMode === "yoy") {
       let prevStart: Date, prevEnd: Date;
       if (compareMode === "yoy") {
@@ -422,16 +426,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               acc.qty += q; acc.sales += amt;
             }
           }
+          // Build month pick lists
+          yoyCurrMonths = Array.from(monthlyCurr.entries())
+            .sort((a,b)=> (a[0] > b[0] ? 1 : -1))
+            .map(([k,v]) => ({ key: k, label: v.label }));
+          yoyPrevMonths = Array.from(monthlyPrev.entries())
+            .map(([k]) => {
+              const [y, mm] = k.split('-').map((x)=>parseInt(x,10));
+              const d = new Date(Date.UTC(y, mm-1, 1));
+              return { key: k, label: `${d.toLocaleString('en-US', { month: 'short' })} ${y}` };
+            })
+            .sort((a,b)=> (a.key > b.key ? 1 : -1));
 
-          const ordered = Array.from(monthlyCurr.entries()).sort((a,b)=> (a[0] > b[0] ? 1 : -1));
           comparisonHeaders = ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]; 
           const rows: Array<Record<string, any>> = [];
-          for (const [mKey, curr] of ordered) {
-            const [y, mm] = mKey.split('-').map((x)=>parseInt(x,10));
-            const prevKey = `${y-1}-${String(mm).padStart(2,'0')}`;
-            const prev = monthlyPrev.get(prevKey) || { qty: 0, sales: 0 };
+          if (yoyA && yoyB && monthlyPrev.has(yoyA) && monthlyCurr.has(yoyB)) {
+            const curr = monthlyCurr.get(yoyB)!;
+            const prev = monthlyPrev.get(yoyA)!;
             rows.push({
-              period: curr.label,
+              period: `${curr.label} vs ${yoyPrevMonths.find(m=>m.key===yoyA)?.label || yoyA}`,
               qtyCurr: curr.qty,
               qtyPrev: prev.qty,
               qtyDelta: curr.qty - prev.qty,
@@ -441,6 +454,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               salesDelta: curr.sales - prev.sales,
               salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
             });
+          } else {
+            const ordered = Array.from(monthlyCurr.entries()).sort((a,b)=> (a[0] > b[0] ? 1 : -1));
+            for (const [mKey, curr] of ordered) {
+              const [y, mm] = mKey.split('-').map((x)=>parseInt(x,10));
+              const prevKey = `${y-1}-${String(mm).padStart(2,'0')}`;
+              const prev = monthlyPrev.get(prevKey) || { qty: 0, sales: 0 };
+              rows.push({
+                period: curr.label,
+                qtyCurr: curr.qty,
+                qtyPrev: prev.qty,
+                qtyDelta: curr.qty - prev.qty,
+                qtyDeltaPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
+                salesCurr: curr.sales,
+                salesPrev: prev.sales,
+                salesDelta: curr.sales - prev.sales,
+                salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
+              });
+            }
           }
           comparisonTable = rows;
         }
@@ -512,15 +543,40 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           ];
         } else {
           comparisonHeaders = ["Product", "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%", "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%"];
+          // Build monthly product maps for current and previous year
+          const monthlyCurrProd = new Map<string, Map<string, { title: string; qty: number; sales: number }>>();
+          for (const [key, info] of buckets.entries()) {
+            let mKey = key;
+            if (!/^\d{4}-\d{2}$/.test(mKey)) {
+              const m = (key.match(/^(\d{4})-(\d{2})/) || info.label.match(/(\d{4})-(\d{2})/));
+              if (m) mKey = `${m[1]}-${m[2]}`; else continue;
+            }
+            if (!monthlyCurrProd.has(mKey)) monthlyCurrProd.set(mKey, new Map());
+            const row = pivot.get(key) || new Map<string, number>();
+            const bucketQty = buckets.get(key)?.quantity || 1;
+            const bucketAmt = bucketSales.get(key) || 0;
+            for (const [pid, q] of row.entries()) {
+              const alloc = (q / bucketQty) * bucketAmt;
+              const title = productSet.get(pid)?.title || pid;
+              const mp = monthlyCurrProd.get(mKey)!;
+              if (!mp.has(pid)) mp.set(pid, { title, qty: 0, sales: 0 });
+              const acc = mp.get(pid)!;
+              acc.qty += q;
+              acc.sales += alloc;
+            }
+          }
+
           const prevStart2 = new Date(start!); prevStart2.setUTCFullYear(prevStart2.getUTCFullYear() - 1);
           const prevEnd2 = new Date(end!); prevEnd2.setUTCFullYear(prevEnd2.getUTCFullYear() - 1);
           const prevSearch2 = `processed_at:>='${prevStart2.toISOString()}' processed_at:<='${prevEnd2.toISOString()}'`;
           const prevRes2 = await admin.graphql(query, { variables: { first: 250, search: prevSearch2 } });
           const prevData2 = await prevRes2.json();
           const prevEdges2 = (prevData2 as any)?.data?.orders?.edges ?? [];
-          const prevCounts = new Map<string, { title: string; quantity: number }>();
-          const prevSalesByProduct = new Map<string, number>();
+          const monthlyPrevProd = new Map<string, Map<string, { title: string; qty: number; sales: number }>>();
           for (const e of prevEdges2) {
+            const d = new Date(e?.node?.processedAt);
+            const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+            if (!monthlyPrevProd.has(mKey)) monthlyPrevProd.set(mKey, new Map());
             const liEdges = e?.node?.lineItems?.edges ?? [];
             for (const li of liEdges) {
               const qty = li?.node?.quantity ?? 0;
@@ -530,34 +586,94 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               const fallbackTitle: string = li?.node?.title ?? "Unknown product";
               const pid: string = p?.id ?? `li:${fallbackTitle}`;
               const ptitle: string = p?.title ?? fallbackTitle;
-              if (!prevCounts.has(pid)) prevCounts.set(pid, { title: ptitle, quantity: 0 });
-              prevCounts.get(pid)!.quantity += qty;
-              prevSalesByProduct.set(pid, (prevSalesByProduct.get(pid) || 0) + amt);
+              const mp = monthlyPrevProd.get(mKey)!;
+              if (!mp.has(pid)) mp.set(pid, { title: ptitle, qty: 0, sales: 0 });
+              const acc = mp.get(pid)!;
+              acc.qty += qty;
+              acc.sales += amt;
             }
           }
-          const keys = new Set<string>([...productSet.keys(), ...prevCounts.keys()]);
-          const rows: Array<Record<string, any>> = [];
-          for (const pid of keys) {
-            const title = productSet.get(pid)?.title || prevCounts.get(pid)?.title || pid;
-            const qCurr = pivot.get(keys as any)?.get(pid as any) || 0; // pivot used per bucket; keep current via counts
-            const qPrev = prevCounts.get(pid)?.quantity || 0;
-            const sCurr = salesByProduct.get(pid) || 0;
-            const sPrev = prevSalesByProduct.get(pid) || 0;
-            rows.push({
-              product: title,
-              productSku: productSet.get(pid)?.sku || "",
-              qtyCurr: (counts.get(pid)?.quantity || 0),
-              qtyPrev: qPrev,
-              qtyDelta: (counts.get(pid)?.quantity || 0) - qPrev,
-              qtyDeltaPct: qPrev ? ((((counts.get(pid)?.quantity || 0) - qPrev) / qPrev) * 100) : null,
-              salesCurr: sCurr,
-              salesPrev: sPrev,
-              salesDelta: sCurr - sPrev,
-              salesDeltaPct: sPrev ? (((sCurr - sPrev) / sPrev) * 100) : null,
-            });
+
+          // Build pick lists
+          yoyCurrMonths = Array.from(monthlyCurrProd.keys()).sort().map((k) => {
+            const [y, mm] = k.split('-').map((x)=>parseInt(x,10));
+            const d = new Date(Date.UTC(y, mm-1, 1));
+            return { key: k, label: `${d.toLocaleString('en-US', { month: 'short' })} ${y}` };
+          });
+          yoyPrevMonths = Array.from(monthlyPrevProd.keys()).sort().map((k) => {
+            const [y, mm] = k.split('-').map((x)=>parseInt(x,10));
+            const d = new Date(Date.UTC(y, mm-1, 1));
+            return { key: k, label: `${d.toLocaleString('en-US', { month: 'short' })} ${y}` };
+          });
+
+          let aMap = (yoyA && monthlyPrevProd.has(yoyA)) ? monthlyPrevProd.get(yoyA)! : undefined;
+          let bMap = (yoyB && monthlyCurrProd.has(yoyB)) ? monthlyCurrProd.get(yoyB)! : undefined;
+
+          // Fallback: if no selection, compare whole current period vs whole previous period aggregated by product
+          if (!aMap || !bMap) {
+            const prevCounts = new Map<string, { title: string; quantity: number }>();
+            const prevSalesByProduct = new Map<string, number>();
+            for (const e of prevEdges2) {
+              const liEdges = e?.node?.lineItems?.edges ?? [];
+              for (const li of liEdges) {
+                const qty = li?.node?.quantity ?? 0;
+                const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                const amt = amountStr ? parseFloat(amountStr) : 0;
+                const p = li?.node?.product;
+                const fallbackTitle: string = li?.node?.title ?? "Unknown product";
+                const pid: string = p?.id ?? `li:${fallbackTitle}`;
+                const ptitle: string = p?.title ?? fallbackTitle;
+                if (!prevCounts.has(pid)) prevCounts.set(pid, { title: ptitle, quantity: 0 });
+                prevCounts.get(pid)!.quantity += qty;
+                prevSalesByProduct.set(pid, (prevSalesByProduct.get(pid) || 0) + amt);
+              }
+            }
+            const keys = new Set<string>([...productSet.keys(), ...prevCounts.keys()]);
+            const rows: Array<Record<string, any>> = [];
+            for (const pid of keys) {
+              const title = productSet.get(pid)?.title || prevCounts.get(pid)?.title || pid;
+              const qPrev = prevCounts.get(pid)?.quantity || 0;
+              const sPrev = prevSalesByProduct.get(pid) || 0;
+              const qCurrTotal = counts.get(pid)?.quantity || 0;
+              const sCurrTotal = salesByProduct.get(pid) || 0;
+              rows.push({
+                product: title,
+                productSku: productSet.get(pid)?.sku || "",
+                qtyCurr: qCurrTotal,
+                qtyPrev: qPrev,
+                qtyDelta: qCurrTotal - qPrev,
+                qtyDeltaPct: qPrev ? (((qCurrTotal - qPrev) / qPrev) * 100) : null,
+                salesCurr: sCurrTotal,
+                salesPrev: sPrev,
+                salesDelta: sCurrTotal - sPrev,
+                salesDeltaPct: sPrev ? (((sCurrTotal - sPrev) / sPrev) * 100) : null,
+              });
+            }
+            rows.sort((a, b) => (b.salesDelta as number) - (a.salesDelta as number));
+            comparisonTable = rows.slice(0, 50);
+          } else {
+            const keys = new Set<string>([...Array.from(aMap.keys()), ...Array.from(bMap.keys())]);
+            const rows: Array<Record<string, any>> = [];
+            for (const pid of keys) {
+              const title = (bMap.get(pid)?.title) || (aMap.get(pid)?.title) || productSet.get(pid)?.title || pid;
+              const a = aMap.get(pid) || { title, qty: 0, sales: 0 };
+              const b = bMap.get(pid) || { title, qty: 0, sales: 0 };
+              rows.push({
+                product: title,
+                productSku: productSet.get(pid)?.sku || "",
+                qtyCurr: b.qty,
+                qtyPrev: a.qty,
+                qtyDelta: b.qty - a.qty,
+                qtyDeltaPct: a.qty ? (((b.qty - a.qty) / a.qty) * 100) : null,
+                salesCurr: b.sales,
+                salesPrev: a.sales,
+                salesDelta: b.sales - a.sales,
+                salesDeltaPct: a.sales ? (((b.sales - a.sales) / a.sales) * 100) : null,
+              });
+            }
+            rows.sort((x, y) => (y.salesDelta as number) - (x.salesDelta as number));
+            comparisonTable = rows.slice(0, 100);
           }
-          rows.sort((a, b) => (b.salesDelta as number) - (a.salesDelta as number));
-          comparisonTable = rows.slice(0, 50);
         }
       }
     }
@@ -583,8 +699,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       seriesProductLines,
       productLegend: top5Ids.map((id) => ({ id, title: productSet.get(id)?.title || id, sku: productSet.get(id)?.sku || "" })),
       momMonths,
-      filters: { start: fmtYMD(start!), end: fmtYMD(end!), granularity: granParam, preset, view, compare: compareMode, chart: chartType, metric: chartMetric, chartScope, compareScope, productFocus, momA: momA || undefined, momB: momB || undefined },
+      filters: { start: fmtYMD(start!), end: fmtYMD(end!), granularity: granParam, preset, view, compare: compareMode, chart: chartType, metric: chartMetric, chartScope, compareScope, productFocus, momA: momA || undefined, momB: momB || undefined, yoyA: yoyA || undefined, yoyB: yoyB || undefined },
       shop: session.shop,
+      yoyPrevMonths,
+      yoyCurrMonths,
     });
   } catch (err: any) {
     dlog("Loader error:", err?.message, (err as any)?.response?.errors || err);
