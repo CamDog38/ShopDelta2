@@ -478,6 +478,72 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             comparisonHeaders = ["Period", "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%", "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%"]; 
           }
         } else {
+          // If no explicit months selected, default to Year-To-Date current vs previous year
+          if (!yoyA && !yoyB) {
+            const now = new Date();
+            const currStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+            const currEnd = now;
+            const prevStartYTD = new Date(Date.UTC(now.getUTCFullYear() - 1, 0, 1));
+            const prevEndYTD = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+
+            const fetchTotals = async (s: Date, e: Date) => {
+              const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
+              let after: string | null = null; let qty = 0; let sales = 0; let currency: string | null = null;
+              while (true) {
+                const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
+                const data = await res.json();
+                const edges = (data as any)?.data?.orders?.edges ?? [];
+                for (const ed of edges) {
+                  const liEdges = ed?.node?.lineItems?.edges ?? [];
+                  for (const li of liEdges) {
+                    const q = li?.node?.quantity ?? 0; qty += q;
+                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                    const amt = amountStr ? parseFloat(amountStr) : 0; sales += amt;
+                    const curr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.currencyCode as any;
+                    if (!currency && curr) currency = curr;
+                  }
+                }
+                const page = (data as any)?.data?.orders;
+                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
+              }
+              return { qty, sales, currency };
+            };
+
+            const prev = await fetchTotals(prevStartYTD, prevEndYTD);
+            const curr = await fetchTotals(currStart, currEnd);
+
+            const yCurr = currStart.getUTCFullYear();
+            const yPrev = yCurr - 1;
+            comparison = {
+              mode: compareMode,
+              current: { qty: curr.qty, sales: curr.sales },
+              previous: { qty: prev.qty, sales: prev.sales },
+              deltas: {
+                qty: curr.qty - prev.qty,
+                qtyPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
+                sales: curr.sales - prev.sales,
+                salesPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
+              },
+              prevRange: { start: fmtYMD(prevStartYTD), end: fmtYMD(prevEndYTD) },
+            };
+            comparisonTable = [{
+              period: `YTD ${yCurr} vs YTD ${yPrev}`,
+              qtyCurr: curr.qty,
+              qtyPrev: prev.qty,
+              qtyDelta: curr.qty - prev.qty,
+              qtyDeltaPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
+              salesCurr: curr.sales,
+              salesPrev: prev.sales,
+              salesDelta: curr.sales - prev.sales,
+              salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
+            }];
+            comparisonHeaders = [
+              'Period',
+              `Qty (YTD ${yCurr})`, `Qty (YTD ${yPrev})`, 'Qty Δ', 'Qty Δ%',
+              `Sales (YTD ${yCurr})`, `Sales (YTD ${yPrev})`, 'Sales Δ', 'Sales Δ%'
+            ];
+            // Skip per-month YoY rendering
+          } else {
           const monthlyCurr = new Map<string, { label: string; qty: number; sales: number }>();
           for (const [key, info] of buckets.entries()) {
             let mKey = key;
@@ -811,8 +877,86 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             bMap = mp;
           }
 
-          // Fallback: if no selection, compare whole current period vs whole previous period aggregated by product
-          if (!aMap || !bMap) {
+          // Fallback: if no selection, or maps missing, compare YTD current vs previous year aggregated by product
+          if (!yoyA && !yoyB) {
+            const now = new Date();
+            const currStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+            const currEnd = now;
+            const prevStartYTD = new Date(Date.UTC(now.getUTCFullYear() - 1, 0, 1));
+            const prevEndYTD = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+
+            const fetchProductTotals = async (s: Date, e: Date) => {
+              const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
+              let after: string | null = null; const map = new Map<string, { title: string; qty: number; sales: number }>();
+              while (true) {
+                const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
+                const data = await res.json();
+                const edges = (data as any)?.data?.orders?.edges ?? [];
+                for (const ed of edges) {
+                  const liEdges = ed?.node?.lineItems?.edges ?? [];
+                  for (const li of liEdges) {
+                    const qty = li?.node?.quantity ?? 0;
+                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+                    const amt = amountStr ? parseFloat(amountStr) : 0;
+                    const p = li?.node?.product;
+                    const fallbackTitle: string = li?.node?.title ?? 'Unknown product';
+                    const pid: string = p?.id ?? `li:${fallbackTitle}`;
+                    const ptitle: string = p?.title ?? fallbackTitle;
+                    if (!map.has(pid)) map.set(pid, { title: ptitle, qty: 0, sales: 0 });
+                    const acc = map.get(pid)!; acc.qty += qty; acc.sales += amt;
+                  }
+                }
+                const page = (data as any)?.data?.orders;
+                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
+              }
+              return map;
+            };
+
+            const aYTD = await fetchProductTotals(prevStartYTD, prevEndYTD);
+            const bYTD = await fetchProductTotals(currStart, currEnd);
+            const keys = new Set<string>([...Array.from(aYTD.keys()), ...Array.from(bYTD.keys())]);
+            const rows: Array<Record<string, any>> = [];
+            for (const pid of keys) {
+              const title = (bYTD.get(pid)?.title) || (aYTD.get(pid)?.title) || productSet.get(pid)?.title || pid;
+              const a = aYTD.get(pid) || { title, qty: 0, sales: 0 };
+              const b = bYTD.get(pid) || { title, qty: 0, sales: 0 };
+              rows.push({
+                product: title,
+                productSku: productSet.get(pid)?.sku || "",
+                qtyCurr: b.qty,
+                qtyPrev: a.qty,
+                qtyDelta: b.qty - a.qty,
+                qtyDeltaPct: a.qty ? (((b.qty - a.qty) / a.qty) * 100) : null,
+                salesCurr: b.sales,
+                salesPrev: a.sales,
+                salesDelta: b.sales - a.sales,
+                salesDeltaPct: a.sales ? (((b.sales - a.sales) / a.sales) * 100) : null,
+              });
+            }
+            rows.sort((a, b) => (b.salesDelta as number) - (a.salesDelta as number));
+            comparisonTable = rows.slice(0, 100);
+            const yCurr = currStart.getUTCFullYear(); const yPrev = yCurr - 1;
+            comparisonHeaders = [
+              `Product (YTD ${yPrev} → YTD ${yCurr})`,
+              `Qty (YTD ${yCurr})`, `Qty (YTD ${yPrev})`, "Qty Δ", "Qty Δ%",
+              `Sales (YTD ${yCurr})`, `Sales (YTD ${yPrev})`, "Sales Δ", "Sales Δ%",
+            ];
+            // Also override top comparison summary
+            const totA = Array.from(aYTD.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
+            const totB = Array.from(bYTD.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
+            comparison = {
+              mode: compareMode,
+              current: { qty: totB.qty, sales: totB.sales },
+              previous: { qty: totA.qty, sales: totA.sales },
+              deltas: {
+                qty: totB.qty - totA.qty,
+                qtyPct: totA.qty ? (((totB.qty - totA.qty) / totA.qty) * 100) : null,
+                sales: totB.sales - totA.sales,
+                salesPct: totA.sales ? (((totB.sales - totA.sales) / totA.sales) * 100) : null,
+              },
+              prevRange: { start: fmtYMD(prevStartYTD), end: fmtYMD(prevEndYTD) },
+            };
+          } else if (!aMap || !bMap) {
             const prevCounts = new Map<string, { title: string; quantity: number }>();
             const prevSalesByProduct = new Map<string, number>();
             for (const e of prevEdges2) {

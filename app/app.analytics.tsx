@@ -197,6 +197,24 @@ export default function AnalyticsPage() {
     return null;
   })();
 
+  // Fallback just for YoY + By Product: if client/server headers miss, derive from current inputs
+  const productYoyHeadingsFallback: string[] | null = (() => {
+    if (filters?.compare === 'yoy' && filters?.compareScope === 'product') {
+      const a = filters.yoyA || (document.getElementById('yoyA') as HTMLInputElement | null)?.value || '';
+      const b = filters.yoyB || (document.getElementById('yoyB') as HTMLInputElement | null)?.value || '';
+      if (a && b) {
+        const la = monthLabelClient(a);
+        const lb = monthLabelClient(b);
+        return [
+          `Product (${la} → ${lb})`,
+          `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
+          `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
+        ];
+      }
+    }
+    return null;
+  })();
+
   // Table data (for Table view)
   const headers = Array.isArray((data as any).headers)
     ? ((data as any).headers as Array<{ id: string; title: string }>)
@@ -1233,7 +1251,7 @@ export default function AnalyticsPage() {
                     </div>
                     <DataTable
                       columnContentTypes={["text","numeric","numeric","numeric","text","numeric","numeric","numeric","text"]}
-                      headings={clientComparisonHeaders || comparisonHeaders || ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]}
+                      headings={clientComparisonHeaders || comparisonHeaders || productYoyHeadingsFallback || ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]}
                       rows={((data as any).comparisonTable as any[]).map((r: any) => [
                         r.period,
                         fmtNum(r.qtyCurr),
@@ -1353,7 +1371,7 @@ export default function AnalyticsPage() {
                     {Array.isArray((data as any).comparisonTable) && (data as any).comparisonTable.length > 0 && !("metric" in (data as any).comparisonTable[0]) ? (
                       <DataTable
                         columnContentTypes={["text","numeric","numeric","numeric","text","numeric","numeric","numeric","text"]}
-                        headings={clientComparisonHeaders || comparisonHeaders || ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]}
+                        headings={clientComparisonHeaders || comparisonHeaders || productYoyHeadingsFallback || ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]}
                         rows={(data as any).comparisonTable.map((r: any) => [
                           r.period,
                           fmtNum(r.qtyCurr),
