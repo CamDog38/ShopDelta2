@@ -485,6 +485,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             const ra = monthRange(yA, mA); const rb = monthRange(yB, mB);
             const prev = await fetchTotals(ra.s, ra.e);
             const curr = await fetchTotals(rb.s, rb.e);
+            // Override high-level comparison summary to match explicit YoY selection
+            comparison = {
+              mode: compareMode,
+              current: { qty: curr.qty, sales: curr.sales },
+              previous: { qty: prev.qty, sales: prev.sales },
+              deltas: {
+                qty: curr.qty - prev.qty,
+                qtyPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
+                sales: curr.sales - prev.sales,
+                salesPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
+              },
+              prevRange: { start: fmtYMD(ra.s), end: fmtYMD(ra.e) },
+            };
             rows.push({
               period: `${monthLabel(yB, mB)} vs ${monthLabel(yA, mA)}`,
               qtyCurr: curr.qty,
@@ -775,6 +788,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 salesDeltaPct: a.sales ? (((b.sales - a.sales) / a.sales) * 100) : null,
               });
             }
+            // Override high-level comparison summary using product totals if explicit months
+            const totA = Array.from(aMap.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
+            const totB = Array.from(bMap.values()).reduce((acc, v) => ({ qty: acc.qty + v.qty, sales: acc.sales + v.sales }), { qty: 0, sales: 0 });
+            comparison = {
+              mode: compareMode,
+              current: { qty: totB.qty, sales: totB.sales },
+              previous: { qty: totA.qty, sales: totA.sales },
+              deltas: {
+                qty: totB.qty - totA.qty,
+                qtyPct: totA.qty ? (((totB.qty - totA.qty) / totA.qty) * 100) : null,
+                sales: totB.sales - totA.sales,
+                salesPct: totA.sales ? (((totB.sales - totA.sales) / totA.sales) * 100) : null,
+              },
+              prevRange: { start: (yoyA || '').concat('-01'), end: (yoyA || '').concat('-28') },
+            };
             rows.sort((x, y) => (y.salesDelta as number) - (x.salesDelta as number));
             comparisonTable = rows.slice(0, 100);
           }

@@ -1201,11 +1201,25 @@ export default function AnalyticsPage() {
                         marginBottom: '20px',
                         color: 'white'
                       }}>
-                        <div style={{ color: 'white', marginBottom: '16px' }}>
-                          <Text as="h4" variant="headingSm">
-                            📊 Period Summary: {filters?.start} to {filters?.end}
-                          </Text>
-                        </div>
+                        {(() => {
+                          const monthLabel = (ym?: string) => {
+                            if (!ym) return '';
+                            const [y, mm] = ym.split('-').map((x) => parseInt(x, 10));
+                            if (!y || !mm) return ym;
+                            const d = new Date(Date.UTC(y, mm - 1, 1));
+                            return `${d.toLocaleString('en-US', { month: 'short' })} ${y}`;
+                          };
+                          const summaryRange = (filters?.yoyA && filters?.yoyB)
+                            ? `${monthLabel(filters.yoyB)} vs ${monthLabel(filters.yoyA)}`
+                            : `${filters?.start} to ${filters?.end}`;
+                          return (
+                            <div style={{ color: 'white', marginBottom: '16px' }}>
+                              <Text as="h4" variant="headingSm">
+                                📊 Period Summary: {summaryRange}
+                              </Text>
+                            </div>
+                          );
+                        })()}
                         <InlineStack gap="400" wrap>
                           <div style={{ 
                             background: 'rgba(255, 255, 255, 0.15)', 
