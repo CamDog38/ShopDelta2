@@ -334,17 +334,33 @@ export default function AnalyticsPage() {
     const form = e?.currentTarget ?? (document.getElementById("filters-form") as HTMLFormElement | null);
     if (!form) return;
     const formData = new FormData(form);
+    // Preserve Shopify embed params
+    const qs = new URLSearchParams(location.search);
+    const host = qs.get("host");
+    const embedded = qs.get("embedded");
+    if (host) formData.set("host", host);
+    if (embedded) formData.set("embedded", embedded);
     submit(formData, { method: "get" });
   };
   const changeView = (view: string) => {
+    if (isNavLoading) return;
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
+    const qs = new URLSearchParams(location.search);
+    const host = qs.get("host"); const embedded = qs.get("embedded");
+    if (host) fd.set("host", host);
+    if (embedded) fd.set("embedded", embedded);
     fd.set("view", view);
     submit(fd, { method: "get" });
   };
   const changeChart = (type: string) => {
+    if (isNavLoading) return;
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
+    const qs = new URLSearchParams(location.search);
+    const host = qs.get("host"); const embedded = qs.get("embedded");
+    if (host) fd.set("host", host);
+    if (embedded) fd.set("embedded", embedded);
     fd.set("view", "chart");
     fd.set("chart", type);
     if (!(fd.get("metric"))) fd.set("metric", (filters?.metric as string) || "qty");
@@ -352,15 +368,25 @@ export default function AnalyticsPage() {
     submit(fd, { method: "get" });
   };
   const changeCompare = (mode: string) => {
+    if (isNavLoading) return;
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
+    const qs = new URLSearchParams(location.search);
+    const host = qs.get("host"); const embedded = qs.get("embedded");
+    if (host) fd.set("host", host);
+    if (embedded) fd.set("embedded", embedded);
     fd.set("compare", mode);
     fd.set("view", "compare");
     submit(fd, { method: "get" });
   };
   const applyPatch = (patch: Record<string, string>) => {
+    if (isNavLoading) return;
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
+    const qs = new URLSearchParams(location.search);
+    const host = qs.get("host"); const embedded = qs.get("embedded");
+    if (host) fd.set("host", host);
+    if (embedded) fd.set("embedded", embedded);
     for (const [k, v] of Object.entries(patch)) fd.set(k, v);
     submit(fd, { method: "get" });
   };
@@ -370,6 +396,11 @@ export default function AnalyticsPage() {
     setIsExporting(true);
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
+    // Preserve Shopify embed params
+    const qs = new URLSearchParams(location.search);
+    const host = qs.get("host"); const embedded = qs.get("embedded");
+    if (host) fd.set("host", host);
+    if (embedded) fd.set("embedded", embedded);
     // Ensure compare/momA/momB/compareScope persist
     if (!fd.get("view")) fd.set("view", filters?.view || "chart");
     if (!fd.get("compare")) fd.set("compare", filters?.compare || "none");
@@ -430,6 +461,9 @@ export default function AnalyticsPage() {
             <input type="hidden" name="metric" defaultValue={filters?.metric ?? "qty"} />
             <input type="hidden" name="chartScope" defaultValue={filters?.chartScope ?? "aggregate"} />
             <input type="hidden" name="productFocus" defaultValue={filters?.productFocus ?? "all"} />
+            {/* Preserve Shopify embed params across GET submissions */}
+            <input type="hidden" name="host" defaultValue={new URLSearchParams(location.search).get('host') ?? ''} />
+            <input type="hidden" name="embedded" defaultValue={new URLSearchParams(location.search).get('embedded') ?? '1'} />
             <InlineStack gap="300" wrap align="end">
               <div style={{ minWidth: '140px' }}>
                 <Text as="span" variant="bodySm" tone="subdued">Time Period</Text>
