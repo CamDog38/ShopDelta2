@@ -54,10 +54,13 @@ function monthLabel(y: number, m1to12: number) {
   return `${d.toLocaleString("en-US", { month: "short" })} ${y}`;
 }
 
-async function fetchYearBuckets(admin: ShopifyAdmin, year: number, upToMonth?: number) {
+async function fetchYearBuckets(admin: ShopifyAdmin, year: number, upToMonth?: number, upToDay?: number) {
   const start = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0));
   const endMonth = (upToMonth && upToMonth >= 1 && upToMonth <= 12) ? upToMonth : 12;
-  const end = new Date(Date.UTC(year, endMonth, 0, 23, 59, 59, 999));
+  // If upToDay is provided, cap to that day within endMonth; otherwise, use month end
+  const end = (upToDay && endMonth)
+    ? new Date(Date.UTC(year, endMonth - 1, upToDay, 23, 59, 59, 999))
+    : new Date(Date.UTC(year, endMonth, 0, 23, 59, 59, 999));
   const search = `processed_at:>='${start.toISOString()}' processed_at:<='${end.toISOString()}'`;
 
   let after: string | null = null;
@@ -96,9 +99,10 @@ export async function computeYoYAnnualAggregate(params: YoYAnnualParams): Promis
   const { admin, yearA, yearB, ytd } = params;
   const now = new Date();
   const upToMonth = ytd ? Math.max(1, now.getUTCMonth() + 1) : 12;
+  const upToDay = ytd ? Math.max(1, now.getUTCDate()) : undefined;
 
-  const { monthly: mA, totalQty: totQtyA, totalSales: totSalesA, start: sA, end: eA } = await fetchYearBuckets(admin, yearA, upToMonth);
-  const { monthly: mB, totalQty: totQtyB, totalSales: totSalesB, start: sB, end: eB } = await fetchYearBuckets(admin, yearB, upToMonth);
+  const { monthly: mA, totalQty: totQtyA, totalSales: totSalesA, start: sA, end: eA } = await fetchYearBuckets(admin, yearA, upToMonth, upToDay);
+  const { monthly: mB, totalQty: totQtyB, totalSales: totSalesB, start: sB, end: eB } = await fetchYearBuckets(admin, yearB, upToMonth, upToDay);
 
   const months: string[] = [];
   for (let m = 1; m <= upToMonth; m++) months.push(String(m).padStart(2, "0"));
@@ -148,11 +152,16 @@ export async function computeYoYAnnualProduct(params: YoYAnnualParams) {
   const { admin, yearA, yearB, ytd } = params;
   const now = new Date();
   const upToMonth = ytd ? Math.max(1, now.getUTCMonth() + 1) : 12;
+  const upToDay = ytd ? Math.max(1, now.getUTCDate()) : undefined;
 
   const startA = new Date(Date.UTC(yearA, 0, 1));
-  const endA = new Date(Date.UTC(yearA, upToMonth, 0, 23, 59, 59, 999));
+  const endA = upToDay
+    ? new Date(Date.UTC(yearA, upToMonth - 1, upToDay, 23, 59, 59, 999))
+    : new Date(Date.UTC(yearA, upToMonth, 0, 23, 59, 59, 999));
   const startB = new Date(Date.UTC(yearB, 0, 1));
-  const endB = new Date(Date.UTC(yearB, upToMonth, 0, 23, 59, 59, 999));
+  const endB = upToDay
+    ? new Date(Date.UTC(yearB, upToMonth - 1, upToDay, 23, 59, 59, 999))
+    : new Date(Date.UTC(yearB, upToMonth, 0, 23, 59, 59, 999));
 
   const searchFor = (s: Date, e: Date) => `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
 
