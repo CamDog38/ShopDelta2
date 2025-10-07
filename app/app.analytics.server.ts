@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "./shopify.server";
+import { computeYoYAnnualAggregate, computeYoYAnnualProduct } from "./analytics.yoy.server";
 
 // Keep server-only helpers here to avoid importing client module
 // Fetch recent orders and compute top products by quantity sold
@@ -44,6 +45,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const momB = url.searchParams.get("momB");
   const yoyA = url.searchParams.get("yoyA"); // prev year month key YYYY-MM
   const yoyB = url.searchParams.get("yoyB"); // current year month key YYYY-MM
+  const yoyMode = (url.searchParams.get("yoyMode") || "monthly").toLowerCase(); // monthly | annual
+  const yoyYearAParam = url.searchParams.get("yoyYearA");
+  const yoyYearBParam = url.searchParams.get("yoyYearB");
+  const yoyYtdParam = url.searchParams.get("yoyYtd"); // '1' | 'true' to enable YTD
   const chartType = url.searchParams.get("chart") || "bar"; // bar | line
   const chartMetric = (url.searchParams.get("metric") || "qty").toLowerCase(); // qty | sales
   const chartScope = (url.searchParams.get("chartScope") || "aggregate").toLowerCase(); // aggregate | product
@@ -478,6 +483,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             comparisonHeaders = ["Period", "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%", "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%"]; 
           }
         } else {
+          // YoY aggregate branch
+          if (yoyMode === "annual") {
+            const nowY = utcNow.getUTCFullYear();
+            const yearA = yoyYearAParam ? parseInt(yoyYearAParam, 10) : nowY - 1;
+            const yearB = yoyYearBParam ? parseInt(yoyYearBParam, 10) : nowY;
+            const ytd = !!(yoyYtdParam && (/^(1|true)$/i).test(yoyYtdParam));
+            const result = await computeYoYAnnualAggregate({ admin, yearA, yearB, ytd });
+            comparison = result.comparison;
+            comparisonTable = result.table;
+            comparisonHeaders = result.headers;
+          } else {
           const monthlyCurr = new Map<string, { label: string; qty: number; sales: number }>();
           for (const [key, info] of buckets.entries()) {
             let mKey = key;
@@ -606,6 +622,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             }
           }
           comparisonTable = rows;
+          }
         }
       } else {
         if (compareMode === "mom") {
@@ -944,7 +961,27 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       seriesProductLines,
       productLegend: top5Ids.map((id) => ({ id, title: productSet.get(id)?.title || id, sku: productSet.get(id)?.sku || "" })),
       momMonths,
-      filters: { start: fmtYMD(start!), end: fmtYMD(end!), granularity: granParam, preset, view, compare: compareMode, chart: chartType, metric: chartMetric, chartScope, compareScope, productFocus, momA: momA || undefined, momB: momB || undefined, yoyA: yoyA || undefined, yoyB: yoyB || undefined },
+      filters: {
+        start: fmtYMD(start!),
+        end: fmtYMD(end!),
+        granularity: granParam,
+        preset,
+        view,
+        compare: compareMode,
+        chart: chartType,
+        metric: chartMetric,
+        chartScope,
+        compareScope,
+        productFocus,
+        momA: momA || undefined,
+        momB: momB || undefined,
+        yoyA: yoyA || undefined,
+        yoyB: yoyB || undefined,
+        yoyMode: yoyMode || undefined,
+        yoyYearA: yoyYearAParam || undefined,
+        yoyYearB: yoyYearBParam || undefined,
+        yoyYtd: yoyYtdParam || undefined,
+      },
       shop: session.shop,
       yoyPrevMonths,
       yoyCurrMonths,

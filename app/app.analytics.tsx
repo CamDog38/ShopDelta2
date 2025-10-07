@@ -3,6 +3,7 @@ import { useLoaderData, useLocation, useRouteError, useSubmit, useNavigation } f
 import { useState } from "react";
 import { Page, DataTable, BlockStack, Text, Link, Button, InlineStack, Spinner } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
+import { YoYControls } from "./components/YoYControls";
 import analyticsStylesUrl from "./styles/analytics.css?url";
 import type { loader as analyticsLoader } from "./app.analytics.server";
 
@@ -102,7 +103,7 @@ export default function AnalyticsPage() {
   const series = Array.isArray((data as any).series)
     ? ((data as any).series as Array<{ key: string; label: string; quantity: number; sales: number }>)
     : [];
-  type Filters = { start: string; end: string; granularity: string; preset: string; view?: string; compare?: string; chart?: string; compareScope?: string; metric?: string; chartScope?: string; productFocus?: string; momA?: string; momB?: string; yoyA?: string; yoyB?: string };
+  type Filters = { start: string; end: string; granularity: string; preset: string; view?: string; compare?: string; chart?: string; compareScope?: string; metric?: string; chartScope?: string; productFocus?: string; momA?: string; momB?: string; yoyA?: string; yoyB?: string; yoyMode?: string; yoyYearA?: string; yoyYearB?: string; yoyYtd?: string };
   const filters = (data as any).filters as Filters | undefined;
   const topBySales = Array.isArray((data as any).topProductsBySales)
     ? ((data as any).topProductsBySales as Array<{ id: string; title: string; sales: number }>)
@@ -308,6 +309,10 @@ export default function AnalyticsPage() {
     if (filters?.momB) fd.set("momB", filters.momB);
     if (filters?.yoyA) fd.set("yoyA", filters.yoyA);
     if (filters?.yoyB) fd.set("yoyB", filters.yoyB);
+    if (filters?.yoyMode) fd.set("yoyMode", filters.yoyMode);
+    if (filters?.yoyYearA) fd.set("yoyYearA", filters.yoyYearA);
+    if (filters?.yoyYearB) fd.set("yoyYearB", filters.yoyYearB);
+    if (filters?.yoyYtd) fd.set("yoyYtd", filters.yoyYtd);
     const params = new URLSearchParams();
     for (const [k, v] of fd.entries()) {
       if (typeof v === "string" && v !== "") params.set(k, v);
@@ -359,6 +364,10 @@ export default function AnalyticsPage() {
             <input type="hidden" name="metric" defaultValue={filters?.metric ?? "qty"} />
             <input type="hidden" name="chartScope" defaultValue={filters?.chartScope ?? "aggregate"} />
             <input type="hidden" name="productFocus" defaultValue={filters?.productFocus ?? "all"} />
+            <input type="hidden" name="yoyMode" defaultValue={filters?.yoyMode ?? "monthly"} />
+            <input type="hidden" name="yoyYearA" defaultValue={filters?.yoyYearA ?? ""} />
+            <input type="hidden" name="yoyYearB" defaultValue={filters?.yoyYearB ?? ""} />
+            <input type="hidden" name="yoyYtd" defaultValue={filters?.yoyYtd ?? ""} />
             <InlineStack gap="300" wrap align="end">
               <div style={{ minWidth: '140px' }}>
                 <Text as="span" variant="bodySm" tone="subdued">Time Period</Text>
@@ -1161,43 +1170,7 @@ export default function AnalyticsPage() {
                   </div>
                 )}
                 {filters?.compare === 'yoy' && (
-                  <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '16px', borderRadius: '8px', marginTop: '12px' }}>
-                    <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
-                    <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'end' }}>
-                      <div style={{ minWidth: '180px' }}>
-                        <Text as="span" variant="bodySm">Month A</Text>
-                        <input id="yoyA" type="month" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
-                        <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
-                      </div>
-                      <div style={{ minWidth: '180px' }}>
-                        <Text as="span" variant="bodySm">Month B</Text>
-                        <input id="yoyB" type="month" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
-                        <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
-                      </div>
-                      <div>
-                        <div onClick={() => {
-                          const a = (document.getElementById('yoyA') as HTMLInputElement | null)?.value || '';
-                          const b = (document.getElementById('yoyB') as HTMLInputElement | null)?.value || '';
-                          const scope = (filters?.compareScope as string) || 'aggregate';
-                          applyPatch({ view: 'compare', compare: 'yoy', compareScope: scope, yoyA: a, yoyB: b });
-                        }} style={{
-                          padding: '10px 20px',
-                          borderRadius: '8px',
-                          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                          color: 'white',
-                          cursor: isNavLoading ? 'not-allowed' : 'pointer',
-                          fontWeight: '600',
-                          fontSize: '14px',
-                          border: 'none',
-                          transition: 'all 0.3s ease',
-                          opacity: isNavLoading ? 0.6 : 1,
-                          boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)'
-                        }}>
-                          Update YoY Comparison
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <YoYControls filters={filters} isNavLoading={isNavLoading} applyPatch={applyPatch} />
                 )}
                 
                 {isNavLoading && (
