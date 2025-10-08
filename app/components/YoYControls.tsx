@@ -122,7 +122,7 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
       {filters?.yoyMode === 'annual' && (
         <>
           <Text as="span" variant="bodySm" tone="subdued">Year vs Year (bypasses top date range)</Text>
-          <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: 'minmax(180px,1fr) minmax(220px,1fr) auto', gap: '16px', alignItems: 'end' }}>
+          <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: 'minmax(160px,1fr) minmax(160px,1fr) auto auto', gap: '16px', alignItems: 'end' }}>
             <div style={{ minWidth: '180px' }}>
               <Text as="span" variant="bodySm">Year A (previous)</Text>
               <select id="yoyYearA" defaultValue={filters?.yoyYearA || String(new Date().getUTCFullYear() - 1)} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
@@ -132,7 +132,7 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
                 })}
               </select>
             </div>
-            <div style={{ minWidth: '220px' }}>
+            <div style={{ minWidth: '180px' }}>
               <Text as="span" variant="bodySm">Year B (current)</Text>
               <select id="yoyYearB" defaultValue={filters?.yoyYearB || String(new Date().getUTCFullYear())} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}>
                 {Array.from({ length: 10 }).map((_, i) => {
@@ -140,17 +140,12 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
                   return <option key={y} value={String(y)}>{y}</option>;
                 })}
               </select>
-              <div style={{ marginTop: '8px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }} title="When enabled, both years are compared up to the same month and day as the selected Year B.">
-                  <input id="yoyYtd" type="checkbox" defaultChecked={!!(filters?.yoyYtd && (filters.yoyYtd === '1' || filters.yoyYtd === 'true'))} />
-                  <Text as="span" variant="bodySm">Year-to-date</Text>
-                </label>
-                <div style={{ marginTop: '4px', lineHeight: 1.3 }}>
-                  <Text as="p" variant="bodyXs" tone="subdued">
-                    Enables a fair comparison by matching Year A to the exact same period as Year B (same month and day cutoff).
-                  </Text>
-                </div>
-              </div>
+            </div>
+            <div style={{ alignSelf: 'end', display: 'flex', alignItems: 'center', height: '38px' }}>
+              <label className="inline-label" title="When enabled, both years are compared up to the same month and day as Year B (same-period YTD).">
+                <input id="yoyYtd" type="checkbox" defaultChecked={!!(filters?.yoyYtd && (filters.yoyYtd === '1' || filters.yoyYtd === 'true'))} />
+                <Text as="span" variant="bodySm">Year-to-date</Text>
+              </label>
             </div>
             <div>
               <div onClick={() => {
