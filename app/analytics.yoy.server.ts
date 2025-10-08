@@ -276,6 +276,26 @@ export async function computeYoYMonthlyAggregate(params: {
     const e = new Date(Date.UTC(y, m1to12, 0, 23, 59, 59, 999));
     return { s, e };
   };
+  const fetchTotals = async (s: Date, e: Date) => {
+    const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
+    let after: string | null = null; let qty = 0; let sales = 0;
+    while (true) {
+      const res: Response = await admin.graphql(ORDERS_QUERY, { variables: { first: 250, search, after } });
+      const data = await res.json();
+      const edges = (data as any)?.data?.orders?.edges ?? [];
+      for (const ed of edges) {
+        const liEdges = ed?.node?.lineItems?.edges ?? [];
+        for (const li of liEdges) {
+          const q = li?.node?.quantity ?? 0; qty += q;
+          const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+          const amt = amountStr ? parseFloat(amountStr) : 0; sales += amt;
+        }
+      }
+      const page = (data as any)?.data?.orders;
+      if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
+    }
+    return { qty, sales };
+  };
 
   const search = `processed_at:>='${start.toISOString()}' processed_at:<='${end.toISOString()}'`;
   let after: string | null = null;
@@ -340,26 +360,6 @@ export async function computeYoYMonthlyAggregate(params: {
     const { y: yA, m: mA } = parseYM(yoyA);
     const { y: yB, m: mB } = parseYM(yoyB);
     const ra = monthRange(yA, mA); const rb = monthRange(yB, mB);
-    const fetchTotals = async (s: Date, e: Date) => {
-      const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
-      let after: string | null = null; let qty = 0; let sales = 0;
-      while (true) {
-        const res: Response = await admin.graphql(ORDERS_QUERY, { variables: { first: 250, search, after } });
-        const data = await res.json();
-        const edges = (data as any)?.data?.orders?.edges ?? [];
-        for (const ed of edges) {
-          const liEdges = ed?.node?.lineItems?.edges ?? [];
-          for (const li of liEdges) {
-            const q = li?.node?.quantity ?? 0; qty += q;
-            const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-            const amt = amountStr ? parseFloat(amountStr) : 0; sales += amt;
-          }
-        }
-        const page = (data as any)?.data?.orders;
-        if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-      }
-      return { qty, sales };
-    };
     const prev = await fetchTotals(ra.s, ra.e);
     const curr = await fetchTotals(rb.s, rb.e);
     headers = ["Period", `Qty (${monthLabel(yB,mB)})`, `Qty (${monthLabel(yA,mA)})`, "Qty Δ", "Qty Δ%", `Sales (${monthLabel(yB,mB)})`, `Sales (${monthLabel(yA,mA)})`, "Sales Δ", "Sales Δ%"];
@@ -389,12 +389,16 @@ export async function computeYoYMonthlyAggregate(params: {
   } else {
     const ordered = Array.from(monthlyCurr.entries()).sort((a,b)=> (a[0] > b[0] ? 1 : -1));
     const lastTwo = ordered.slice(-2);
-    for (const [mKey, curr] of lastTwo) {
+    for (const [mKey, currMonth] of lastTwo) {
       const [y, mm] = mKey.split('-').map((x)=>parseInt(x,10));
-      const prevKey = `${y-1}-${String(mm).padStart(2,'0')}`;
-      const prev = monthlyPrev.get(prevKey) || { qty: 0, sales: 0 };
+      // Compute previous year full-month totals, independent of the selected range
+      const prevYM = { y: y - 1, m: mm };
+      const ra = monthRange(prevYM.y, prevYM.m);
+      const rb = monthRange(y, mm);
+      const prev = await fetchTotals(ra.s, ra.e);
+      const curr = await fetchTotals(rb.s, rb.e);
       rows.push({
-        period: curr.label,
+        period: `${currMonth.label} vs ${monthLabel(prevYM.y, prevYM.m)}`,
         qtyCurr: curr.qty,
         qtyPrev: prev.qty,
         qtyDelta: curr.qty - prev.qty,
