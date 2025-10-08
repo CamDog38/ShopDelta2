@@ -1265,9 +1265,23 @@ export default function AnalyticsPage() {
                             const d = new Date(Date.UTC(y, mm - 1, 1));
                             return `${d.toLocaleString('en-US', { month: 'short' })} ${y}`;
                           };
-                          const summaryRange = (filters?.yoyA && filters?.yoyB)
-                            ? `${monthLabel(filters.yoyB)} vs ${monthLabel(filters.yoyA)}`
-                            : `${filters?.start} to ${filters?.end}`;
+                          const isYoYMonthly = (filters?.compare === 'yoy') && ((filters?.yoyMode || 'monthly') === 'monthly');
+                          const summaryRange = (() => {
+                            if (filters?.yoyA && filters?.yoyB) {
+                              return `${monthLabel(filters.yoyB)} vs ${monthLabel(filters.yoyA)}`;
+                            }
+                            if (isYoYMonthly) {
+                              const now = new Date();
+                              const y = now.getUTCFullYear();
+                              const m = now.getUTCMonth() + 1;
+                              const curr = new Date(Date.UTC(y, m - 1, 1));
+                              const prev = new Date(Date.UTC(y - 1, m - 1, 1));
+                              const currLabel = `${curr.toLocaleString('en-US', { month: 'short' })} ${curr.getUTCFullYear()}`;
+                              const prevLabel = `${prev.toLocaleString('en-US', { month: 'short' })} ${prev.getUTCFullYear()}`;
+                              return `${currLabel} vs ${prevLabel} (Month-to-date)`;
+                            }
+                            return `${filters?.start} to ${filters?.end}`;
+                          })();
                           return (
                             <div style={{ color: 'white', marginBottom: '16px' }}>
                               <Text as="h4" variant="headingSm">

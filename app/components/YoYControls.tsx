@@ -42,7 +42,7 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
     const a = toYMLabel(filters?.yoyA);
     const b = toYMLabel(filters?.yoyB);
     if (a && b) return `Comparing ${b} vs ${a}`;
-    return 'Pick two months to compare performance month-over-month across years.';
+    return 'Compare any two months across different years. Leave blank to view the default month‑to‑date comparison.';
   })();
 
   return (
@@ -106,7 +106,53 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
 
       {(filters?.yoyMode || 'monthly') === 'monthly' && (
         <>
-          <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection</Text>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <span className="yoy-readme-trigger" style={{
+                background: 'var(--p-color-bg-surface-secondary)',
+                color: 'var(--p-color-text-subdued)',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                fontSize: 12,
+                cursor: 'default',
+                border: '1px solid var(--p-color-border)'
+              }}>
+                ℹ Read me
+              </span>
+              <div style={{
+                position: 'absolute',
+                top: '120%',
+                left: 0,
+                zIndex: 10,
+                width: 360,
+                background: 'white',
+                color: 'var(--p-color-text)',
+                border: '1px solid var(--p-color-border)',
+                borderRadius: 8,
+                padding: 12,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                display: 'none'
+              }} className="yoy-readme">
+                <div style={{ marginBottom: 8 }}>
+                  <Text as="p" variant="bodySm"><b>Year-over-Year Month Selection</b></Text>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text as="p" variant="bodyXs" tone="subdued">Compare any two months across different years. For example, Jan 2024 vs Jan 2025. This helps you see if growth is consistent month-to-month year over year, not just in total.</Text>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 16 }}>
+                  <li><Text as="span" variant="bodyXs" tone="subdued"><b>Overall Totals</b> → Quick view of your full performance shift.</Text></li>
+                  <li><Text as="span" variant="bodyXs" tone="subdued"><b>By Product</b> → See which products drove the change, and spot hidden wins or under-performers.</Text></li>
+                </ul>
+                <div style={{ marginTop: 8 }}>
+                  <Text as="p" variant="bodyXs" tone="subdued">Pick months if you want a specific slice, or leave blank to view the default <b>month‑to‑date</b> comparison.</Text>
+                </div>
+              </div>
+              <style>{`
+                .yoy-readme-trigger:hover + .yoy-readme, .yoy-readme:hover { display: block; }
+              `}</style>
+            </div>
+          </div>
           <div style={{ marginTop: '4px' }}>
             <Text as="p" variant="bodyXs" tone="subdued">{monthlySummary}</Text>
           </div>
