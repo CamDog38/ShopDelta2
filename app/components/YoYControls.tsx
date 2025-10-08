@@ -21,6 +21,7 @@ type Props = {
 
 export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
   const [showYoyHelp, setShowYoyHelp] = useState(false);
+  const [showYoyAnnualHelp, setShowYoyAnnualHelp] = useState(false);
   // Helper: compute human summary strings to show value immediately
   const ytdOn = !!(filters?.yoyYtd && (filters.yoyYtd === '1' || filters.yoyYtd === 'true'));
   const now = new Date();
@@ -199,7 +200,57 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
 
       {filters?.yoyMode === 'annual' && (
         <>
-          <Text as="span" variant="bodySm" tone="subdued">Year vs Year (bypasses top date range)</Text>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Text as="span" variant="bodySm" tone="subdued">Year-over-Year (Annual)</Text>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <span
+                onMouseEnter={() => setShowYoyAnnualHelp(true)}
+                onMouseLeave={() => setShowYoyAnnualHelp(false)}
+                style={{
+                  background: '#ff9800',
+                  color: '#ffffff',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  fontSize: 12,
+                  cursor: 'help',
+                  border: '1px solid rgba(0,0,0,0.1)'
+                }}
+                aria-describedby="yoy-annual-readme-pop"
+              >
+                ℹ Read me
+              </span>
+              <div
+                id="yoy-annual-readme-pop"
+                role="tooltip"
+                style={{
+                  position: 'absolute',
+                  top: '120%',
+                  left: 0,
+                  zIndex: 10,
+                  width: 380,
+                  background: 'white',
+                  color: 'var(--p-color-text)',
+                  border: '1px solid var(--p-color-border)',
+                  borderRadius: 8,
+                  padding: 12,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  display: showYoyAnnualHelp ? 'block' : 'none'
+                }}
+              >
+                <div style={{ marginBottom: 8 }}>
+                  <Text as="p" variant="bodySm"><b>Year-over-Year (Annual)</b></Text>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text as="p" variant="bodyXs" tone="subdued">Compare full years against each other. Pick Year A (previous) and Year B (current) to track performance shifts.</Text>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 16 }}>
+                  <li><Text as="span" variant="bodyXs" tone="subdued"><b>Annual Totals</b> → Compare entire years side by side.</Text></li>
+                  <li><Text as="span" variant="bodyXs" tone="subdued"><b>Year-to-Date (YTD) Toggle</b> → Align both years to the same cut-off date (e.g. Jan–Oct 2024 vs Jan–Oct 2025), so you see progress on an equal timeline.</Text></li>
+                  <li><Text as="span" variant="bodyXs" tone="subdued">Use <b>Overall Totals</b> for a high-level view, or <b>By Product</b> to see which products drove the change.</Text></li>
+                </ul>
+              </div>
+            </div>
+          </div>
           <div style={{ marginTop: '4px' }}>
             <Text as="p" variant="bodyXs" tone="subdued">{annualSummary}. Enable YTD to match Year A to the same period as Year B.</Text>
           </div>
