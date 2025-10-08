@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "./shopify.server";
-import { computeYoYAnnualAggregate, computeYoYAnnualProduct } from "./analytics.yoy.server";
+import { computeYoYAnnualAggregate, computeYoYAnnualProduct, computeYoYMonthlyAggregate, computeYoYMonthlyProduct } from "./analytics.yoy.server";
 import { computeMoMDefaultFromYoYAggregate, computeMoMDefaultFromYoYProduct } from "./analytics.mom.server";
 
 // Keep server-only helpers here to avoid importing client module
@@ -452,134 +452,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             comparisonTable = result.table;
             comparisonHeaders = result.headers;
           } else {
-          const monthlyCurr = new Map<string, { label: string; qty: number; sales: number }>();
-          for (const [key, info] of buckets.entries()) {
-            let mKey = key;
-            if (!/^\d{4}-\d{2}$/.test(mKey)) {
-              const m = (key.match(/^(\d{4})-(\d{2})/) || info.label.match(/(\d{4})-(\d{2})/));
-              if (m) mKey = `${m[1]}-${m[2]}`; else continue;
-            }
-            const [y, mm] = mKey.split('-').map((x)=>parseInt(x,10));
-            const d = new Date(Date.UTC(y, mm-1, 1));
-            const label = `${d.toLocaleString("en-US", { month: "short" })} ${y}`;
-            if (!monthlyCurr.has(mKey)) monthlyCurr.set(mKey, { label, qty: 0, sales: 0 });
-            const acc = monthlyCurr.get(mKey)!;
-            acc.qty += info.quantity;
-            acc.sales += (bucketSales.get(key) || 0);
-          }
-
-          const monthlyPrev = new Map<string, { qty: number; sales: number }>();
-          // Note: We only have prevEdges inside the earlier block; for brevity in this split file,
-          // we recompute prevEdges similarly to above when needed.
-          const prevStart = new Date(start!); prevStart.setUTCFullYear(prevStart.getUTCFullYear() - 1);
-          const prevEnd = new Date(end!); prevEnd.setUTCFullYear(prevEnd.getUTCFullYear() - 1);
-          const prevSearch = `processed_at:>='${prevStart.toISOString()}' processed_at:<='${prevEnd.toISOString()}'`;
-          const prevRes = await admin.graphql(query, { variables: { first: 250, search: prevSearch } });
-          const prevData = await prevRes.json();
-          const prevEdges = (prevData as any)?.data?.orders?.edges ?? [];
-          for (const e of prevEdges) {
-            const d = new Date(e?.node?.processedAt);
-            const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-            if (!monthlyPrev.has(mKey)) monthlyPrev.set(mKey, { qty: 0, sales: 0 });
-            const liEdges = e?.node?.lineItems?.edges ?? [];
-            for (const li of liEdges) {
-              const q = li?.node?.quantity ?? 0;
-              const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-              const amt = amountStr ? parseFloat(amountStr) : 0;
-              const acc = monthlyPrev.get(mKey)!;
-              acc.qty += q; acc.sales += amt;
-            }
-          }
-          // Keep broad lists; do not restrict to in-range months
-          if (yoyA && yoyB) {
-            const [ya, ma] = yoyA.split('-').map((x)=>parseInt(x,10));
-            const [yb, mb] = yoyB.split('-').map((x)=>parseInt(x,10));
-            const la = `${new Date(Date.UTC(ya, ma-1, 1)).toLocaleString('en-US',{month:'short'})} ${ya}`;
-            const lb = `${new Date(Date.UTC(yb, mb-1, 1)).toLocaleString('en-US',{month:'short'})} ${yb}`;
-            comparisonHeaders = ["Period", `Qty (${lb})`, `Qty (${la})`, "Qty Δ", "Qty Δ%", `Sales (${lb})`, `Sales (${la})`, "Sales Δ", "Sales Δ%"];
-          } else {
-            comparisonHeaders = ["Period","Qty (Curr)","Qty (Prev)","Qty Δ","Qty Δ%","Sales (Curr)","Sales (Prev)","Sales Δ","Sales Δ%"]; 
-          }
-          const rows: Array<Record<string, any>> = [];
-          if (yoyA && yoyB) {
-            // Fetch exact months independently of the selected range
-            const parseYM = (k: string) => { const [y, m] = k.split('-').map((x)=>parseInt(x,10)); return { y, m }; };
-            const monthRange = (y: number, m1to12: number) => {
-              const s = new Date(Date.UTC(y, m1to12 - 1, 1));
-              const e = new Date(Date.UTC(y, m1to12, 0, 23, 59, 59, 999));
-              return { s, e };
-            };
-            const fetchTotals = async (s: Date, e: Date) => {
-              const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
-              let after: string | null = null; let qty = 0; let sales = 0; let currency: string | null = null;
-              while (true) {
-                const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
-                const data = await res.json();
-                const edges = (data as any)?.data?.orders?.edges ?? [];
-                for (const ed of edges) {
-                  const liEdges = ed?.node?.lineItems?.edges ?? [];
-                  for (const li of liEdges) {
-                    const q = li?.node?.quantity ?? 0; qty += q;
-                    const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-                    const amt = amountStr ? parseFloat(amountStr) : 0; sales += amt;
-                    const curr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.currencyCode as any;
-                    if (!currency && curr) currency = curr;
-                  }
-                }
-                const page = (data as any)?.data?.orders;
-                if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-              }
-              return { qty, sales, currency };
-            };
-            const { y: yA, m: mA } = parseYM(yoyA);
-            const { y: yB, m: mB } = parseYM(yoyB);
-            const ra = monthRange(yA, mA); const rb = monthRange(yB, mB);
-            const prev = await fetchTotals(ra.s, ra.e);
-            const curr = await fetchTotals(rb.s, rb.e);
-            // Override high-level comparison summary to match explicit YoY selection
-            comparison = {
-              mode: compareMode,
-              current: { qty: curr.qty, sales: curr.sales },
-              previous: { qty: prev.qty, sales: prev.sales },
-              deltas: {
-                qty: curr.qty - prev.qty,
-                qtyPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
-                sales: curr.sales - prev.sales,
-                salesPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
-              },
-              prevRange: { start: fmtYMD(ra.s), end: fmtYMD(ra.e) },
-            };
-            rows.push({
-              period: `${monthLabel(yB, mB)} vs ${monthLabel(yA, mA)}`,
-              qtyCurr: curr.qty,
-              qtyPrev: prev.qty,
-              qtyDelta: curr.qty - prev.qty,
-              qtyDeltaPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
-              salesCurr: curr.sales,
-              salesPrev: prev.sales,
-              salesDelta: curr.sales - prev.sales,
-              salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
-            });
-          } else {
-            const ordered = Array.from(monthlyCurr.entries()).sort((a,b)=> (a[0] > b[0] ? 1 : -1));
-            for (const [mKey, curr] of ordered) {
-              const [y, mm] = mKey.split('-').map((x)=>parseInt(x,10));
-              const prevKey = `${y-1}-${String(mm).padStart(2,'0')}`;
-              const prev = monthlyPrev.get(prevKey) || { qty: 0, sales: 0 };
-              rows.push({
-                period: curr.label,
-                qtyCurr: curr.qty,
-                qtyPrev: prev.qty,
-                qtyDelta: curr.qty - prev.qty,
-                qtyDeltaPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
-                salesCurr: curr.sales,
-                salesPrev: prev.sales,
-                salesDelta: curr.sales - prev.sales,
-                salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
-              });
-            }
-          }
-          comparisonTable = rows;
+            const result = await computeYoYMonthlyAggregate({ admin, start: start!, end: end!, yoyA, yoyB });
+            comparison = result.comparison;
+            comparisonTable = result.table;
+            comparisonHeaders = result.headers;
           }
         }
       } else {
