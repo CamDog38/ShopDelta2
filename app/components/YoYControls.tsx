@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Text, InlineStack } from "@shopify/polaris";
 
 export type Filters = {
@@ -20,6 +20,7 @@ type Props = {
 };
 
 export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
+  const [showYoyHelp, setShowYoyHelp] = useState(false);
   // Helper: compute human summary strings to show value immediately
   const ytdOn = !!(filters?.yoyYtd && (filters.yoyYtd === '1' || filters.yoyYtd === 'true'));
   const now = new Date();
@@ -109,15 +110,21 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection</Text>
             <div style={{ position: 'relative', display: 'inline-block' }}>
-              <span className="yoy-readme-trigger" style={{
-                background: 'var(--p-color-bg-surface-secondary)',
-                color: 'var(--p-color-text-subdued)',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                fontSize: 12,
-                cursor: 'default',
-                border: '1px solid var(--p-color-border)'
-              }}>
+              <span
+                className="yoy-readme-trigger"
+                onMouseEnter={() => setShowYoyHelp(true)}
+                onMouseLeave={() => setShowYoyHelp(false)}
+                style={{
+                  background: '#ff9800',
+                  color: '#ffffff',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  fontSize: 12,
+                  cursor: 'help',
+                  border: '1px solid rgba(0,0,0,0.1)'
+                }}
+                aria-describedby="yoy-readme-pop"
+              >
                 ℹ Read me
               </span>
               <div style={{
@@ -132,8 +139,8 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
                 borderRadius: 8,
                 padding: 12,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                display: 'none'
-              }} className="yoy-readme">
+                display: showYoyHelp ? 'block' : 'none'
+              }} className="yoy-readme" id="yoy-readme-pop" role="tooltip">
                 <div style={{ marginBottom: 8 }}>
                   <Text as="p" variant="bodySm"><b>Year-over-Year Month Selection</b></Text>
                 </div>
@@ -148,9 +155,6 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
                   <Text as="p" variant="bodyXs" tone="subdued">Pick months if you want a specific slice, or leave blank to view the default <b>month‑to‑date</b> comparison.</Text>
                 </div>
               </div>
-              <style>{`
-                .yoy-readme-trigger:hover + .yoy-readme, .yoy-readme:hover { display: block; }
-              `}</style>
             </div>
           </div>
           <div style={{ marginTop: '4px' }}>
