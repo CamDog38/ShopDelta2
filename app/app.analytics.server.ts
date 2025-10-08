@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "./shopify.server";
 import { computeYoYAnnualAggregate, computeYoYAnnualProduct } from "./analytics.yoy.server";
+import { computeMoMDefaultFromYoYAggregate, computeMoMDefaultFromYoYProduct } from "./analytics.mom.server";
 
 // Keep server-only helpers here to avoid importing client module
 // Fetch recent orders and compute top products by quantity sold
@@ -394,66 +395,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 salesDeltaPct: a.sales ? (((b.sales - a.sales) / a.sales) * 100) : null,
               });
             } else {
-              // Fetch those months directly if not present in current range
-              const parseYM = (k: string) => { const [y, m] = k.split('-').map((x)=>parseInt(x,10)); return { y, m }; };
-              const monthRange = (y: number, m1to12: number) => {
-                const s = new Date(Date.UTC(y, m1to12 - 1, 1));
-                const e = new Date(Date.UTC(y, m1to12, 0, 23, 59, 59, 999));
-                return { s, e };
-              };
-              const fetchTotals = async (s: Date, e: Date) => {
-                const search = `processed_at:>='${s.toISOString()}' processed_at:<='${e.toISOString()}'`;
-                let after: string | null = null; let qty = 0; let sales = 0;
-                while (true) {
-                  const res: Response = await admin.graphql(query, { variables: { first: 250, search, after } });
-                  const data = await res.json();
-                  const edges = (data as any)?.data?.orders?.edges ?? [];
-                  for (const ed of edges) {
-                    const liEdges = ed?.node?.lineItems?.edges ?? [];
-                    for (const li of liEdges) {
-                      const q = li?.node?.quantity ?? 0; qty += q;
-                      const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-                      const amt = amountStr ? parseFloat(amountStr) : 0; sales += amt;
-                    }
-                  }
-                  const page = (data as any)?.data?.orders;
-                  if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-                }
-                return { qty, sales };
-              };
-              const { y: yA, m: mA } = parseYM(momA);
-              const { y: yB, m: mB } = parseYM(momB);
-              const ra = monthRange(yA, mA); const rb = monthRange(yB, mB);
-              const prev = await fetchTotals(ra.s, ra.e);
-              const curr = await fetchTotals(rb.s, rb.e);
-              const label = (y:number,m:number) => {
-                const d = new Date(Date.UTC(y,m-1,1));
-                return `${d.toLocaleString('en-US',{month:'short'})} ${y}`;
-              };
-              rows.push({
-                period: `${label(yA,mA)} → ${label(yB,mB)}`,
-                qtyCurr: curr.qty,
-                qtyPrev: prev.qty,
-                qtyDelta: curr.qty - prev.qty,
-                qtyDeltaPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
-                salesCurr: curr.sales,
-                salesPrev: prev.sales,
-                salesDelta: curr.sales - prev.sales,
-                salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
-              });
-              // Override summary to match explicit MoM selection
-              comparison = {
-                mode: compareMode,
-                current: { qty: curr.qty, sales: curr.sales },
-                previous: { qty: prev.qty, sales: prev.sales },
-                deltas: {
-                  qty: curr.qty - prev.qty,
-                  qtyPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
-                  sales: curr.sales - prev.sales,
-                  salesPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
-                },
-                prevRange: { start: fmtYMD(ra.s), end: fmtYMD(ra.e) },
-              };
+              // Honor selected date range: if explicit months are out of range, fall back to last two in-range months
+              const ordered = Array.from(monthly.entries()).sort((x, y) => (x[0] > y[0] ? 1 : -1));
+              if (ordered.length >= 2) {
+                const prev = ordered[ordered.length - 2][1];
+                const curr = ordered[ordered.length - 1][1];
+                rows.push({
+                  period: `${prev.label} → ${curr.label}`,
+                  qtyCurr: curr.qty,
+                  qtyPrev: prev.qty,
+                  qtyDelta: curr.qty - prev.qty,
+                  qtyDeltaPct: prev.qty ? (((curr.qty - prev.qty) / prev.qty) * 100) : null,
+                  salesCurr: curr.sales,
+                  salesPrev: prev.sales,
+                  salesDelta: curr.sales - prev.sales,
+                  salesDeltaPct: prev.sales ? (((curr.sales - prev.sales) / prev.sales) * 100) : null,
+                });
+              }
             }
           } else {
             for (let i = 1; i < ordered.length; i++) {
@@ -656,20 +614,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               bKey = orderedMonths[orderedMonths.length - 1];
             }
           }
-          const aMap = (aKey ? monthlyProduct.get(aKey) : undefined) || new Map<string, { title: string; qty: number; sales: number }>();
-          const bMap = (bKey ? monthlyProduct.get(bKey) : undefined) || new Map<string, { title: string; qty: number; sales: number }>();
-          const monthLabel = (k?: string) => {
-            if (!k) return "";
-            const [y, mm] = k.split('-').map((x) => parseInt(x, 10));
-            const d = new Date(Date.UTC(y, mm - 1, 1));
-            return `${d.toLocaleString("en-US", { month: "short" })} ${y}`;
+          const aMapFinal = (aKey ? monthlyProduct.get(aKey) : undefined) || new Map<string, { title: string; qty: number; sales: number }>();
+          const bMapFinal = (bKey ? monthlyProduct.get(bKey) : undefined) || new Map<string, { title: string; qty: number; sales: number }>();
+          const fmtYM = (ym?: string) => {
+            if (!ym) return '';
+            const [yy, mm] = ym.split('-').map((x)=>parseInt(x,10));
+            const d = new Date(Date.UTC(yy, mm-1, 1));
+            return `${d.toLocaleString('en-US',{ month: 'short' })} ${yy}`;
           };
-          const keys = new Set<string>([...Array.from(aMap.keys()), ...Array.from(bMap.keys())]);
+          const keys = new Set<string>([...Array.from(aMapFinal.keys()), ...Array.from(bMapFinal.keys())]);
           const rows: Array<Record<string, any>> = [];
           for (const pid of keys) {
-            const title = (bMap.get(pid)?.title) || (aMap.get(pid)?.title) || productSet.get(pid)?.title || pid;
-            const a = aMap.get(pid) || { title, qty: 0, sales: 0 };
-            const b = bMap.get(pid) || { title, qty: 0, sales: 0 };
+            const title = (bMapFinal.get(pid)?.title) || (aMapFinal.get(pid)?.title) || productSet.get(pid)?.title || pid;
+            const a = aMapFinal.get(pid) || { title, qty: 0, sales: 0 };
+            const b = bMapFinal.get(pid) || { title, qty: 0, sales: 0 };
             rows.push({
               product: title,
               productSku: productSet.get(pid)?.sku || "",
@@ -685,19 +643,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           }
           rows.sort((x, y) => (y.salesDelta as number) - (x.salesDelta as number));
           comparisonTable = rows.slice(0, 100);
-          const fmtYM = (ym?: string) => {
-            if (!ym) return '';
-            const [yy, mm] = ym.split('-').map((x)=>parseInt(x,10));
-            const d = new Date(Date.UTC(yy, mm-1, 1));
-            return `${d.toLocaleString('en-US',{ month: 'short' })} ${yy}`;
-          };
           const la = aKey ? fmtYM(aKey) : 'Prev';
           const lb = bKey ? fmtYM(bKey) : 'Curr';
           comparisonHeaders = [
             `Product (${la} → ${lb})`,
-            `Qty (${lb})`, `Qty (${la})`, "Qty Δ", "Qty Δ%",
-            `Sales (${lb})`, `Sales (${la})`, "Sales Δ", "Sales Δ%",
+            `Qty (${lb})`, `Qty (${la})`, 'Qty Δ', 'Qty Δ%',
+            `Sales (${lb})`, `Sales (${la})`, 'Sales Δ', 'Sales Δ%'
           ];
+
+          // Keep the high-level summary based on current top date range (no override here)
         } else {
           comparisonHeaders = ["Product", "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%", "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%"];
           // Build monthly product maps for current and previous year
