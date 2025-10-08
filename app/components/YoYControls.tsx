@@ -20,6 +20,31 @@ type Props = {
 };
 
 export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
+  // Helper: compute human summary strings to show value immediately
+  const ytdOn = !!(filters?.yoyYtd && (filters.yoyYtd === '1' || filters.yoyYtd === 'true'));
+  const now = new Date();
+  const ytdSuffix = ytdOn
+    ? ` • YTD through ${now.toLocaleString('en-US', { month: 'short' })} ${now.getUTCDate()}`
+    : '';
+  const toYMLabel = (ym?: string) => {
+    if (!ym) return '';
+    const [y, m] = ym.split('-').map((x)=>parseInt(x,10));
+    if (!y || !m) return ym;
+    const d = new Date(Date.UTC(y, m-1, 1));
+    return `${d.toLocaleString('en-US',{month:'short'})} ${y}`;
+  };
+  const annualSummary = (() => {
+    const a = filters?.yoyYearA || String(new Date().getUTCFullYear() - 1);
+    const b = filters?.yoyYearB || String(new Date().getUTCFullYear());
+    return `Comparing ${b} vs ${a}${ytdSuffix}`;
+  })();
+  const monthlySummary = (() => {
+    const a = toYMLabel(filters?.yoyA);
+    const b = toYMLabel(filters?.yoyB);
+    if (a && b) return `Comparing ${b} vs ${a}`;
+    return 'Pick two months to compare performance month-over-month across years.';
+  })();
+
   return (
     <div style={{ background: 'var(--p-color-bg-surface-secondary)', padding: '16px', borderRadius: '8px', marginTop: '12px' }}>
       {/* YoY Sub-tabs */}
@@ -82,15 +107,18 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
       {(filters?.yoyMode || 'monthly') === 'monthly' && (
         <>
           <Text as="span" variant="bodySm" tone="subdued">Year-over-Year Month Selection (optional)</Text>
+          <div style={{ marginTop: '4px' }}>
+            <Text as="p" variant="bodyXs" tone="subdued">{monthlySummary}</Text>
+          </div>
           <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: 'minmax(180px,1fr) minmax(180px,1fr) auto', gap: '16px', alignItems: 'end' }}>
             <div style={{ minWidth: '180px' }}>
               <Text as="span" variant="bodySm">Month A</Text>
-              <input id="yoyA" type="month" defaultValue={filters?.yoyA || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+              <input id="yoyA" type="month" defaultValue={filters?.yoyA || ''} title="Previous/base month" style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
               <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
             </div>
             <div style={{ minWidth: '180px' }}>
               <Text as="span" variant="bodySm">Month B</Text>
-              <input id="yoyB" type="month" defaultValue={filters?.yoyB || ''} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+              <input id="yoyB" type="month" defaultValue={filters?.yoyB || ''} title="Current/comparison month" style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
               <Text as="span" variant="bodyXs" tone="subdued">Pick any year/month</Text>
             </div>
             <div>
@@ -122,6 +150,9 @@ export function YoYControls({ filters, isNavLoading, applyPatch }: Props) {
       {filters?.yoyMode === 'annual' && (
         <>
           <Text as="span" variant="bodySm" tone="subdued">Year vs Year (bypasses top date range)</Text>
+          <div style={{ marginTop: '4px' }}>
+            <Text as="p" variant="bodyXs" tone="subdued">{annualSummary}. Enable YTD to match Year A to the same period as Year B.</Text>
+          </div>
           <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: 'minmax(160px,1fr) minmax(160px,1fr) auto auto', gap: '16px', alignItems: 'end' }}>
             <div style={{ minWidth: '180px' }}>
               <Text as="span" variant="bodySm">Year A (previous)</Text>
