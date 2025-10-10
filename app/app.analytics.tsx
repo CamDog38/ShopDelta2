@@ -53,6 +53,7 @@ export default function AnalyticsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [showTrendsHelp, setShowTrendsHelp] = useState(false);
   const [showBreakdownHelp, setShowBreakdownHelp] = useState(false);
+  const [showSummaryHelp, setShowSummaryHelp] = useState(false);
   // Handle known error cases with helpful actions
   const errType = (data as any).error as string | undefined;
   if (errType === "ACCESS_DENIED") {
@@ -1062,7 +1063,6 @@ export default function AnalyticsPage() {
         {/* Table view */}
         {filters?.view === "table" && (
           <>
-            <Text as="h2" variant="headingMd">Table View</Text>
             <DataTable
               columnContentTypes={tableColumnTypes}
               headings={tableHeadings}
@@ -1074,9 +1074,65 @@ export default function AnalyticsPage() {
         {/* Summary view */}
         {filters?.view === "summary" && (
           <>
-            <Text as="h2" variant="headingMd">Summary</Text>
-            <Text as="p" variant="bodyMd">Total quantity: {fmtNum(totals?.qty)}</Text>
-            <Text as="p" variant="bodyMd">Total sales: {fmtMoney(totals?.sales)}</Text>
+            <div style={{ background: 'var(--p-color-bg-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text as="h2" variant="headingMd">Summary</Text>
+                <div style={{ position: 'relative' }}>
+                  <span
+                    onMouseEnter={() => setShowSummaryHelp(true)}
+                    onMouseLeave={() => setShowSummaryHelp(false)}
+                    style={{
+                      background: '#ff9800',
+                      color: '#ffffff',
+                      padding: '4px 10px',
+                      borderRadius: '999px',
+                      fontSize: 12,
+                      cursor: 'help',
+                      border: '1px solid rgba(0,0,0,0.1)'
+                    }}
+                    aria-describedby="summary-readme-pop"
+                  >
+                    ℹ Read me
+                  </span>
+                  <div
+                    id="summary-readme-pop"
+                    role="tooltip"
+                    style={{
+                      position: 'absolute',
+                      top: '130%',
+                      right: 0,
+                      zIndex: 10,
+                      width: 420,
+                      background: 'white',
+                      color: 'var(--p-color-text)',
+                      border: '1px solid var(--p-color-border)',
+                      borderRadius: 8,
+                      padding: 12,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                      display: showSummaryHelp ? 'block' : 'none'
+                    }}
+                  >
+                    <div style={{ marginBottom: 8 }}>
+                      <Text as="p" variant="bodySm"><b>Summary</b></Text>
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <Text as="p" variant="bodyXs" tone="subdued">See the big picture of your store’s performance at a glance.</Text>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      <li><Text as="span" variant="bodyXs" tone="subdued"><b>Totals</b> → Sales and quantities across your selected date range</Text></li>
+                      <li><Text as="span" variant="bodyXs" tone="subdued"><b>Top Products</b> → Which items are driving the most revenue and volume</Text></li>
+                    </ul>
+                    <div style={{ marginTop: 8 }}>
+                      <Text as="p" variant="bodyXs" tone="subdued">Use Overview as your starting point to quickly understand how the store is doing overall.</Text>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <Text as="p" variant="bodyMd">Total quantity: {fmtNum(totals?.qty)}</Text>
+                <Text as="p" variant="bodyMd">Total sales: {fmtMoney(totals?.sales)}</Text>
+              </div>
+            </div>
 
             <Text as="h3" variant="headingSm" tone="subdued">Top 10 products by quantity</Text>
             <DataTable
