@@ -52,6 +52,7 @@ export default function AnalyticsPage() {
   const isNavLoading = navigation.state !== "idle";
   const [isExporting, setIsExporting] = useState(false);
   const [showTrendsHelp, setShowTrendsHelp] = useState(false);
+  const [showBreakdownHelp, setShowBreakdownHelp] = useState(false);
   // Handle known error cases with helpful actions
   const errType = (data as any).error as string | undefined;
   if (errType === "ACCESS_DENIED") {
@@ -508,7 +509,7 @@ export default function AnalyticsPage() {
                   : 'none'
               }}
             >
-              📋 Data Table
+              📋 Breakdown
             </div>
             <div 
               onClick={() => changeView("summary")} 
@@ -634,6 +635,62 @@ export default function AnalyticsPage() {
                 </ul>
                 <div style={{ marginTop: 8 }}>
                   <Text as="p" variant="bodyXs" tone="subdued">Use Trends to understand momentum — not just totals.</Text>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Breakdown help tooltip (below tabs) */}
+        {filters?.view === "table" && (
+          <div style={{ paddingTop: '8px', paddingBottom: '4px' }}>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <span
+                onMouseEnter={() => setShowBreakdownHelp(true)}
+                onMouseLeave={() => setShowBreakdownHelp(false)}
+                style={{
+                  background: '#ff9800',
+                  color: '#ffffff',
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  fontSize: 12,
+                  cursor: 'help',
+                  border: '1px solid rgba(0,0,0,0.1)'
+                }}
+                aria-describedby="breakdown-readme-pop"
+              >
+                ℹ Read me
+              </span>
+              <div
+                id="breakdown-readme-pop"
+                role="tooltip"
+                style={{
+                  position: 'absolute',
+                  top: '130%',
+                  left: 0,
+                  zIndex: 10,
+                  width: 420,
+                  background: 'white',
+                  color: 'var(--p-color-text)',
+                  border: '1px solid var(--p-color-border)',
+                  borderRadius: 8,
+                  padding: 12,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  display: showBreakdownHelp ? 'block' : 'none'
+                }}
+              >
+                <div style={{ marginBottom: 8 }}>
+                  <Text as="p" variant="bodySm"><b>Breakdown</b></Text>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text as="p" variant="bodyXs" tone="subdued">See detailed performance by product within the date range you select. Group results daily, weekly, or monthly to fit how you track sales.</Text>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 16 }}>
+                  <li><Text as="span" variant="bodyXs" tone="subdued"><b>By Product</b> → Spot top performers and slow movers</Text></li>
+                  <li><Text as="span" variant="bodyXs" tone="subdued"><b>By Date Range</b> → Drill into specific periods with custom filters</Text></li>
+                </ul>
+                <div style={{ marginTop: 8 }}>
+                  <Text as="p" variant="bodyXs" tone="subdued">Use this view for precise tracking and to answer “what sold, and when.”</Text>
                 </div>
               </div>
             </div>
