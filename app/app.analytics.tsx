@@ -51,6 +51,7 @@ export default function AnalyticsPage() {
   const navigation = useNavigation();
   const isNavLoading = navigation.state !== "idle";
   const [isExporting, setIsExporting] = useState(false);
+  const [showTrendsHelp, setShowTrendsHelp] = useState(false);
   // Handle known error cases with helpful actions
   const errType = (data as any).error as string | undefined;
   if (errType === "ACCESS_DENIED") {
@@ -481,10 +482,63 @@ export default function AnalyticsPage() {
                 opacity: isNavLoading ? 0.6 : 1,
                 boxShadow: filters?.view === "chart" || !filters?.view 
                   ? '0 4px 15px rgba(79, 172, 254, 0.4)' 
-                  : 'none'
+                  : 'none',
+                position: 'relative',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
             >
-              📊 Charts
+              📊 Trends
+              <span
+                onMouseEnter={(e) => { e.stopPropagation(); setShowTrendsHelp(true); }}
+                onMouseLeave={(e) => { e.stopPropagation(); setShowTrendsHelp(false); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                style={{
+                  background: '#ff9800',
+                  color: '#ffffff',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  fontSize: 12,
+                  cursor: 'help',
+                  border: '1px solid rgba(0,0,0,0.1)'
+                }}
+                aria-describedby="trends-readme-pop"
+              >
+                ℹ Read me
+              </span>
+              <div
+                id="trends-readme-pop"
+                role="tooltip"
+                style={{
+                  position: 'absolute',
+                  top: '120%',
+                  left: 0,
+                  zIndex: 10,
+                  width: 380,
+                  background: 'white',
+                  color: 'var(--p-color-text)',
+                  border: '1px solid var(--p-color-border)',
+                  borderRadius: 8,
+                  padding: 12,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  display: showTrendsHelp ? 'block' : 'none'
+                }}
+              >
+                <div style={{ marginBottom: 8 }}>
+                  <Text as="p" variant="bodySm"><b>Trends</b></Text>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <Text as="p" variant="bodyXs" tone="subdued">View how your store’s performance changes over time. Spot patterns, peaks, and dips so you know when to push harder or adjust.</Text>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 16 }}>
+                  <li><Text as="span" variant="bodyXs" tone="subdued"><b>Sales & Quantity</b> → Track daily, weekly, or monthly changes</Text></li>
+                  <li><Text as="span" variant="bodyXs" tone="subdued"><b>Visual Insights</b> → Clear charts show growth or slowdowns</Text></li>
+                </ul>
+                <div style={{ marginTop: 8 }}>
+                  <Text as="p" variant="bodyXs" tone="subdued">Use Trends to understand momentum — not just totals.</Text>
+                </div>
+              </div>
             </div>
             <div 
               onClick={() => changeView("table")} 
