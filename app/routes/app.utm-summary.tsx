@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
-import { Page, Card, Layout, Text, InlineStack, Box, Button, TextField } from "@shopify/polaris";
+import { Page, Card, Layout, Text, InlineStack, Box, Button, TextField, DataTable, Scrollable } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 
 export const meta: MetaFunction = () => [{ title: "Campaign Analytics" }];
@@ -105,41 +105,15 @@ export default function UtmSummaryPage() {
           <Layout.Section>
             <Card>
               <Box padding="400">
-                <InlineStack gap="800" align="start" wrap>
-                  <Metric label="Orders" value={fmtNum(data.orders)} />
-                  <Metric label="Total sales" value={fmtMoney(data.total_sales, data.currency)} />
-                  <Metric label="Average order value" value={fmtMoney(data.average_order_value, data.currency)} />
-                  <Metric label="Gross sales" value={fmtMoney(data.gross_sales, data.currency)} />
-                  <Metric label="Net sales" value={fmtMoney(data.net_sales, data.currency)} />
-                  <Metric label="Discounts" value={fmtMoney(data.discounts, data.currency)} />
-                  <Metric label="Taxes" value={fmtMoney(data.taxes, data.currency)} />
-                  <Metric label="Shipping" value={fmtMoney(data.total_shipping_charges, data.currency)} />
-                  <Metric label="Total returns" value={fmtMoney(data.total_returns, data.currency)} />
-                  <Metric label="Orders (first-time)" value={fmtNum(data.orders_first_time)} />
-                  <Metric label="Orders (returning)" value={fmtNum(data.orders_returning)} />
-                  <Metric label="Sales (first-time)" value={fmtMoney(data.total_sales_first_time, data.currency)} />
-                  <Metric label="Sales (returning)" value={fmtMoney(data.total_sales_returning, data.currency)} />
-                  <Metric label="New customers" value={fmtNum(data.new_customers)} />
-                  <Metric label="Returning customers" value={fmtNum(data.returning_customers)} />
-                  <Metric label="Amount spent / customer" value={fmtMoney(data.amount_spent_per_customer, data.currency)} />
-                  <Metric label="# orders / customer" value={fmtNum(data.number_of_orders_per_customer)} />
-                  <Metric label="Returning customer rate" value={fmtPct(data.returning_customer_rate)} />
-                  {/* Staff-assisted metric removed */}
-                  <Metric label="Top UTM campaign" value={data.order_utm_campaign || "-"} />
-                  <Metric label="Top UTM medium" value={data.order_utm_medium || "-"} />
-                  <Metric label="Currency" value={data.currency || "-"} />
-                </InlineStack>
-              </Box>
-            </Card>
-          </Layout.Section>
-        )}
-
-        {data && (
-          <Layout.Section>
-            <Card>
-              <Box padding="400">
-                <Text as="h3" variant="headingMd">Raw response</Text>
-                <pre style={{ overflow: "auto", marginTop: 12 }}>{JSON.stringify(data, null, 2)}</pre>
+                <Scrollable shadow style={{ maxHeight: 420 }}>
+                  <DataTable
+                    columnContentTypes={["text", "text"]}
+                    headings={["Metric", "Value"]}
+                    rows={buildRows(data)}
+                    increasedTableDensity
+                    stickyHeader
+                  />
+                </Scrollable>
               </Box>
             </Card>
           </Layout.Section>
@@ -149,13 +123,30 @@ export default function UtmSummaryPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <Box minWidth="260" padding="200" borderWidth="025" borderRadius="200">
-      <Text as="p" variant="bodySm" tone="subdued">{label}</Text>
-      <Text as="p" variant="headingMd">{value}</Text>
-    </Box>
-  );
+function buildRows(d: any): Array<[string, string]> {
+  const rows: Array<[string, string]> = [];
+  rows.push(["Orders", fmtNum(d.orders)]);
+  rows.push(["Total sales", fmtMoney(d.total_sales, d.currency)]);
+  rows.push(["Average order value", fmtMoney(d.average_order_value, d.currency)]);
+  rows.push(["Gross sales", fmtMoney(d.gross_sales, d.currency)]);
+  rows.push(["Net sales", fmtMoney(d.net_sales, d.currency)]);
+  rows.push(["Discounts", fmtMoney(d.discounts, d.currency)]);
+  rows.push(["Taxes", fmtMoney(d.taxes, d.currency)]);
+  rows.push(["Shipping", fmtMoney(d.total_shipping_charges, d.currency)]);
+  rows.push(["Total returns", fmtMoney(d.total_returns, d.currency)]);
+  rows.push(["Orders (first-time)", fmtNum(d.orders_first_time)]);
+  rows.push(["Orders (returning)", fmtNum(d.orders_returning)]);
+  rows.push(["Sales (first-time)", fmtMoney(d.total_sales_first_time, d.currency)]);
+  rows.push(["Sales (returning)", fmtMoney(d.total_sales_returning, d.currency)]);
+  rows.push(["New customers", fmtNum(d.new_customers)]);
+  rows.push(["Returning customers", fmtNum(d.returning_customers)]);
+  rows.push(["Amount spent / customer", fmtMoney(d.amount_spent_per_customer, d.currency)]);
+  rows.push(["# orders / customer", fmtNum(d.number_of_orders_per_customer)]);
+  rows.push(["Returning customer rate", fmtPct(d.returning_customer_rate)]);
+  rows.push(["Top UTM campaign", d.order_utm_campaign || "-"]);
+  rows.push(["Top UTM medium", d.order_utm_medium || "-"]);
+  rows.push(["Currency", d.currency || "-"]);
+  return rows;
 }
 
 function fmtNum(n: number | null | undefined) {
