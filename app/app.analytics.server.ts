@@ -306,6 +306,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       })
     }));
 
+    // Build full legend list of all products seen in range
+    const legendIds = Array.from(productSet.keys()).sort((a, b) => {
+      const sb = salesByProduct.get(b) || 0;
+      const sa = salesByProduct.get(a) || 0;
+      if (sb !== sa) return sb - sa;
+      const qb = counts.get(b)?.quantity || 0;
+      const qa = counts.get(a)?.quantity || 0;
+      return qb - qa;
+    });
+
     const top20Ids = topProducts.slice(0, 20).map((p) => p.id);
     const table = series.map((s) => {
       const row: Record<string, any> = { key: s.key, label: s.label };
@@ -798,7 +808,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       comparisonHeaders,
       seriesProduct,
       seriesProductLines,
-      productLegend: topIds.map((id) => ({ id, title: productSet.get(id)?.title || id, sku: productSet.get(id)?.sku || "" })),
+      productLegend: legendIds.map((id) => ({ id, title: productSet.get(id)?.title || id, sku: productSet.get(id)?.sku || "" })),
       momMonths,
       filters: {
         start: fmtYMD(start!),

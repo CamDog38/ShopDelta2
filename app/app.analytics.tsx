@@ -1027,22 +1027,9 @@ export default function AnalyticsPage() {
                     </g>
                   </svg>
                 </div>
-                {/* Legend and product focus (beneath chart) */}
+                {/* Product focus (beneath chart) - dropdown only */}
                 {filters?.chartScope === 'product' && productLegend.length > 0 && (
                   <div className="analytics-legend">
-                    <div className="analytics-legend-chips">
-                      {productLegend.map((p, idx) => (
-                        <span
-                          key={p.id}
-                          className={`analytics-legend-chip ${(filters?.productFocus && filters.productFocus !== 'all' && filters.productFocus !== p.id) ? 'analytics-muted' : ''}`}
-                          onClick={() => applyPatch({ view: 'chart', chartScope: 'product', productFocus: (filters?.productFocus === p.id ? 'all' : p.id) })}
-                          title={`Show only ${p.title}`}
-                        >
-                          <span className="analytics-legend-swatch" style={{ background: colorPalette[idx % colorPalette.length] }} />
-                          <span className="text-12">{p.title}</span>
-                        </span>
-                      ))}
-                    </div>
                     <label className="inline-label">
                       <span className="legend-label">Show only</span>
                       <select defaultValue={filters?.productFocus ?? 'all'} onChange={(e) => applyPatch({ view: 'chart', productFocus: e.currentTarget.value })}>
