@@ -101,35 +101,30 @@ export default function UtmSummaryPage() {
           </Layout.Section>
         )}
 
-        {data && data.campaigns && data.campaigns.length > 0 && (
+        {data && (
           <Layout.Section>
             <Card>
               <Box padding="400">
-                <Scrollable shadow style={{ maxHeight: 500 }}>
+                <Scrollable shadow style={{ maxHeight: 420 }}>
                   <DataTable
-                    columnContentTypes={["text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"]}
+                    columnContentTypes={[
+                      "text", "text", "numeric", "numeric", "numeric", "numeric", 
+                      "numeric", "numeric", "numeric", "numeric", "numeric"
+                    ]}
                     headings={[
-                      "Campaign",
+                      "Order UTM campaign",
+                      "Order UTM medium",
+                      "Total sales",
                       "Orders",
-                      "Total Sales",
-                      "AOV",
-                      "Gross Sales",
-                      "Net Sales",
+                      "Customers",
+                      "Gross sales",
+                      "Net sales",
                       "Discounts",
                       "Taxes",
                       "Shipping",
-                      "Returns",
-                      "FT Orders",
-                      "RT Orders",
-                      "FT Sales",
-                      "RT Sales",
-                      "New Customers",
-                      "Returning Customers",
-                      "Spent/Customer",
-                      "Orders/Customer",
-                      "RT Rate %",
+                      "Returns"
                     ]}
-                    rows={buildCampaignRows(data)}
+                    rows={buildUTMRows(data)}
                     increasedTableDensity
                     stickyHeader
                   />
@@ -143,33 +138,43 @@ export default function UtmSummaryPage() {
   );
 }
 
-function buildCampaignRows(d: any): Array<Array<string | number>> {
+function buildUTMRows(d: any): Array<Array<string | number>> {
   const rows: Array<Array<string | number>> = [];
-  if (!d.campaigns) return rows;
+  const curr = d.currency || "USD";
   
-  for (const c of d.campaigns) {
+  // Summary row first
+  const s = d.summary;
+  rows.push([
+    "Summary",
+    "",
+    fmtMoney(s.total_sales, curr),
+    fmtNum(s.orders),
+    fmtNum(s.customers),
+    fmtMoney(s.gross_sales, curr),
+    fmtMoney(s.net_sales, curr),
+    fmtMoney(s.discounts, curr),
+    fmtMoney(s.taxes, curr),
+    fmtMoney(s.total_shipping_charges, curr),
+    fmtMoney(s.total_returns, curr),
+  ]);
+
+  // Each UTM combination
+  for (const utm of d.utmRows || []) {
     rows.push([
-      c.campaign || "-",
-      fmtNum(c.orders),
-      fmtMoney(c.total_sales, d.currency),
-      fmtMoney(c.average_order_value, d.currency),
-      fmtMoney(c.gross_sales, d.currency),
-      fmtMoney(c.net_sales, d.currency),
-      fmtMoney(c.discounts, d.currency),
-      fmtMoney(c.taxes, d.currency),
-      fmtMoney(c.total_shipping_charges, d.currency),
-      fmtMoney(c.total_returns, d.currency),
-      fmtNum(c.orders_first_time),
-      fmtNum(c.orders_returning),
-      fmtMoney(c.total_sales_first_time, d.currency),
-      fmtMoney(c.total_sales_returning, d.currency),
-      fmtNum(c.new_customers),
-      fmtNum(c.returning_customers),
-      fmtMoney(c.amount_spent_per_customer, d.currency),
-      fmtNum(c.number_of_orders_per_customer),
-      fmtPct(c.returning_customer_rate),
+      utm.campaign,
+      utm.medium,
+      fmtMoney(utm.total_sales, curr),
+      fmtNum(utm.orders),
+      fmtNum(utm.customers),
+      fmtMoney(utm.gross_sales, curr),
+      fmtMoney(utm.net_sales, curr),
+      fmtMoney(utm.discounts, curr),
+      fmtMoney(utm.taxes, curr),
+      fmtMoney(utm.shipping, curr),
+      fmtMoney(utm.returns, curr),
     ]);
   }
+  
   return rows;
 }
 

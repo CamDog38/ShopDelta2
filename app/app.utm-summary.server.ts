@@ -80,8 +80,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let total_sales_returning = 0;
   const customerSet = new Set<string>();
 
-  const utmCampaignCounts = new Map<string, number>();
-  const utmMediumCounts = new Map<string, number>();
+  // Track by UTM combination key: "campaign|medium"
+  type UTMStats = {
+    campaign: string;
+    medium: string;
+    orders: number;
+    total_sales: number;
+    gross_sales: number;
+    discounts: number;
+    taxes: number;
+    shipping: number;
+    returns: number;
+    customers: Set<string>;
+    orders_first_time: number;
+    orders_returning: number;
+  };
+  const utmMap = new Map<string, UTMStats>();
 
   while (hasNextPage) {
     const range = `created_at:>='${since}T00:00:00Z' created_at:<='${until}T23:59:59Z'`;
@@ -138,8 +152,52 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
 
       const { utm_campaign, utm_medium } = parseUTMs(o?.customerJourneySummary?.lastVisit?.landingPage);
-      if (utm_campaign) utmCampaignCounts.set(utm_campaign, (utmCampaignCounts.get(utm_campaign) || 0) + 1);
-      if (utm_medium) utmMediumCounts.set(utm_medium, (utmMediumCounts.get(utm_medium) || 0) + 1);
+      const campaign = utm_campaign || "(not set)";
+      const medium = utm_medium || "(not set)";
+      const key = `${campaign}|${medium}`;
+
+      if (!utmMap.has(key)) {
+        utmMap.set(key, {
+          campaign,
+          medium,
+          orders: 0,
+          total_sales: 0,
+          gross_sales: 0,
+          discounts: 0,
+          taxes: 0,
+          shipping: 0,
+          returns: 0,
+          customers: new Set(),
+          orders_first_time: 0,
+          orders_returning: 0,
+        });
+      }
+      const stats = utmMap.get(key)!;
+      stats.orders += 1;
+      stats.total_sales += toNum(curr.amount);
+      stats.gross_sales += toNum(sub.amount);
+      {
+        const discAmt = toNum(disc.amount);
+        if (discAmt !== 0) stats.discounts += -discAmt;
+      }
+      stats.taxes += toNum(tax.amount);
+      stats.shipping += toNum(ship.amount);
+      // Add returns from refunds
+      for (const refund of refundsArr) {
+        const rlis: any[] = refund?.refundLineItems?.edges ?? [];
+        for (const rliEdge of rlis) {
+          const rli = rliEdge?.node;
+          const qty = toNum(rli?.quantity);
+          const price = toNum(rli?.lineItem?.originalUnitPriceSet?.shopMoney?.amount);
+          stats.returns += qty * price;
+        }
+      }
+      if (custId) stats.customers.add(custId);
+      if (ordersCount <= 1) {
+        stats.orders_first_time += 1;
+      } else {
+        stats.orders_returning += 1;
+      }
     }
   }
 
@@ -156,159 +214,51 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-  // Build campaign breakdown (each campaign as a row with metrics)
-  const campaignBreakdown: Array<{
-    campaign: string;
-    orders: number;
-    total_sales: number;
-    average_order_value: number;
-    net_sales: number;
-    gross_sales: number;
-    discounts: number;
-    taxes: number;
-    total_shipping_charges: number;
-    total_returns: number;
-    orders_first_time: number;
-    orders_returning: number;
-    total_sales_first_time: number;
-    total_sales_returning: number;
-    new_customers: number;
-    returning_customers: number;
-    amount_spent_per_customer: number;
-    number_of_orders_per_customer: number;
-    returning_customer_rate: number;
-  }> = [];
+  // Build UTM breakdown rows
+  const utmRows = Array.from(utmMap.values()).map(s => ({
+    campaign: s.campaign,
+    medium: s.medium,
+    orders: s.orders,
+    total_sales: round(s.total_sales),
+    gross_sales: round(s.gross_sales),
+    net_sales: round(s.gross_sales + s.discounts),
+    discounts: round(s.discounts),
+    taxes: round(s.taxes),
+    shipping: round(s.shipping),
+    returns: round(s.returns),
+    customers: s.customers.size,
+    orders_first_time: s.orders_first_time,
+    orders_returning: s.orders_returning,
+  }));
 
-  // Re-iterate through edges to build per-campaign metrics
-  cursor = null;
-  hasNextPage = true;
-  const campaignMetrics = new Map<string, {
-    orders: number;
-    total_sales: number;
-    gross_sales: number;
-    discounts: number;
-    taxes: number;
-    total_shipping_charges: number;
-    total_returns: number;
-    orders_first_time: number;
-    orders_returning: number;
-    total_sales_first_time: number;
-    total_sales_returning: number;
-    customers: Set<string>;
-  }>();
-
-  while (hasNextPage) {
-    const range = `created_at:>='${since}T00:00:00Z' created_at:<='${until}T23:59:59Z'`;
-    const builtQuery = QUERY.replace("__RANGE__", range.replace(/"/g, '\\"'));
-    const res: Response = await admin.graphql(builtQuery, { variables: { cursor } });
-    const data: any = await res.json();
-    const page: any = data?.data?.orders;
-    const edges = (page?.edges ?? []) as any[];
-
-    hasNextPage = !!page?.pageInfo?.hasNextPage;
-    cursor = page?.pageInfo?.endCursor ?? null;
-
-    for (const e of edges) {
-      const o = e.node;
-      const { utm_campaign } = parseUTMs(o?.customerJourneySummary?.lastVisit?.landingPage);
-      if (!utm_campaign) continue; // Skip orders without campaign
-
-      if (!campaignMetrics.has(utm_campaign)) {
-        campaignMetrics.set(utm_campaign, {
-          orders: 0,
-          total_sales: 0,
-          gross_sales: 0,
-          discounts: 0,
-          taxes: 0,
-          total_shipping_charges: 0,
-          total_returns: 0,
-          orders_first_time: 0,
-          orders_returning: 0,
-          total_sales_first_time: 0,
-          total_sales_returning: 0,
-          customers: new Set(),
-        });
-      }
-
-      const m = campaignMetrics.get(utm_campaign)!;
-      const curr: MoneyLike = o.currentTotalPriceSet?.shopMoney || {};
-      const sub: MoneyLike = o.subtotalPriceSet?.shopMoney || {};
-      const disc: MoneyLike = o.totalDiscountsSet?.shopMoney || {};
-      const tax: MoneyLike = o.totalTaxSet?.shopMoney || {};
-      const ship: MoneyLike = o.totalShippingPriceSet?.shopMoney || {};
-
-      m.orders += 1;
-      m.total_sales += toNum(curr.amount);
-      m.gross_sales += toNum(sub.amount);
-      m.discounts += -toNum(disc.amount);
-      m.taxes += toNum(tax.amount);
-      m.total_shipping_charges += toNum(ship.amount);
-
-      const refundsArr: any[] = o?.refunds ?? [];
-      for (const refund of refundsArr) {
-        const rlis: any[] = refund?.refundLineItems?.edges ?? [];
-        for (const rliEdge of rlis) {
-          const rli = rliEdge?.node;
-          m.total_returns += toNum(rli?.quantity) * toNum(rli?.lineItem?.originalUnitPriceSet?.shopMoney?.amount);
-        }
-      }
-
-      const custId: string | null = o.customer?.id || null;
-      const ordersCount: number = o.customer?.numberOfOrders ?? 0;
-      if (custId) m.customers.add(custId);
-      if (ordersCount <= 1) {
-        m.orders_first_time += 1;
-        m.total_sales_first_time += toNum(curr.amount);
-      } else {
-        m.orders_returning += 1;
-        m.total_sales_returning += toNum(curr.amount);
-      }
-    }
-  }
-
-  // Build breakdown rows
-  for (const [campaign, metrics] of campaignMetrics.entries()) {
-    const aov = metrics.orders ? metrics.total_sales / metrics.orders : 0;
-    const unique_cust = metrics.customers.size || 1;
-    const amt_per_cust = metrics.total_sales / unique_cust;
-    const orders_per_cust = metrics.orders / unique_cust;
-    const ret_cust_rate = (metrics.orders_first_time + metrics.orders_returning)
-      ? (metrics.orders_returning / (metrics.orders_first_time + metrics.orders_returning)) * 100
-      : 0;
-
-    campaignBreakdown.push({
-      campaign,
-      orders: metrics.orders,
-      total_sales: round(metrics.total_sales),
-      average_order_value: round(aov),
-      net_sales: round(metrics.gross_sales + metrics.discounts),
-      gross_sales: round(metrics.gross_sales),
-      discounts: round(metrics.discounts),
-      taxes: round(metrics.taxes),
-      total_shipping_charges: round(metrics.total_shipping_charges),
-      total_returns: round(metrics.total_returns),
-      orders_first_time: metrics.orders_first_time,
-      orders_returning: metrics.orders_returning,
-      total_sales_first_time: round(metrics.total_sales_first_time),
-      total_sales_returning: round(metrics.total_sales_returning),
-      new_customers: metrics.orders_first_time,
-      returning_customers: Math.max(0, unique_cust - metrics.orders_first_time),
-      amount_spent_per_customer: round(amt_per_cust),
-      number_of_orders_per_customer: round(orders_per_cust),
-      returning_customer_rate: round(ret_cust_rate),
-    });
-  }
+  // Sort by total_sales descending
+  utmRows.sort((a, b) => b.total_sales - a.total_sales);
 
   return json({
-    campaigns: campaignBreakdown,
+    // Summary totals
+    summary: {
+      total_sales: round(total_sales),
+      orders,
+      customers: customerSet.size,
+      average_order_value: round(average_order_value),
+      net_sales: round(net_sales),
+      gross_sales: round(gross_sales),
+      discounts: round(discounts),
+      taxes: round(taxes),
+      total_shipping_charges: round(total_shipping_charges),
+      total_returns: round(total_returns),
+      orders_first_time,
+      orders_returning,
+      total_sales_first_time: round(total_sales_first_time),
+      total_sales_returning: round(total_sales_returning),
+      new_customers,
+      returning_customers,
+      amount_spent_per_customer: round(amount_spent_per_customer),
+      number_of_orders_per_customer: round(number_of_orders_per_customer),
+      returning_customer_rate: round(returning_customer_rate),
+    },
+    // UTM breakdown
+    utmRows,
     currency: currency || null,
   });
 };
-
-function top<T extends string>(m: Map<T, number>): T | null {
-  let best: T | null = null; let bestN = -1;
-  for (const [k, v] of m.entries()) {
-    if (v > bestN) { best = k; bestN = v; }
-  }
-  return best;
-}
