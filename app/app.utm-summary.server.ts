@@ -13,6 +13,38 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const { admin } = await authenticate.admin(request);
 
+  const QUERY = `#graphql
+    query OrdersWithUTMs($cursor: String) {
+      orders(first: 250, after: $cursor, query: "__RANGE__") {
+        pageInfo { hasNextPage endCursor }
+        edges {
+          node {
+            id
+            createdAt
+            landingSite
+            landingSiteRef
+            referringSite
+            currentTotalPriceSet { shopMoney { amount currencyCode } }
+            subtotalPriceSet { shopMoney { amount } }
+            totalDiscountsSet { shopMoney { amount } }
+            totalTaxSet { shopMoney { amount } }
+            totalShippingPriceSet { shopMoney { amount } }
+            sourceName
+            customer { id numberOfOrders }
+            refunds {
+              refundLineItems(first: 100) {
+                edges { node { quantity lineItem { originalUnitPriceSet { shopMoney { amount } } } } }
+              }
+            }
+            lineItems(first: 100) {
+              edges { node { quantity originalUnitPriceSet { shopMoney { amount } } } }
+            }
+          }
+        }
+      }
+    }
+  `;
+
   type MoneyLike = { amount?: string | number | null; currencyCode?: string | null };
   const toNum = (x: any) => (x == null ? 0 : typeof x === "string" ? parseFloat(x) : (x as number) || 0);
 
@@ -68,8 +100,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return { utm_campaign, utm_medium, utm_source };
   };
 
-  // REST pagination
-  let pageInfo: any = null;
+  let cursor: string | null = null;
+  let hasNextPage = true;
 
   let total_sales = 0;
   let gross_sales = 0;
@@ -105,50 +137,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
   const utmMap = new Map<string, UTMStats>();
 
-  // Loop REST pages
-  // We request minimal fields needed for performance
-  const baseQuery: any = {
-    status: "any",
-    limit: 250,
-    created_at_min: `${since}T00:00:00Z`,
-    created_at_max: `${until}T23:59:59Z`,
-    fields: [
-      "id",
-      "currency",
-      "current_total_price_set",
-      "subtotal_price_set",
-      "total_discounts_set",
-      "total_tax_set",
-      "total_shipping_price_set",
-      "shipping_lines",
-      "tax_lines",
-      "refunds",
-      "line_items",
-      "customer",
-      "landing_site",
-      "landing_site_ref",
-      "referring_site",
-    ].join(","),
-  };
+  while (hasNextPage) {
+    const range = `created_at:>='${since}T00:00:00Z' created_at:<='${until}T23:59:59Z'`;
+    const builtQuery = QUERY.replace("__RANGE__", range.replace(/"/g, '\\"'));
+    const res: Response = await admin.graphql(builtQuery, { variables: { cursor } });
+    const data: any = await res.json();
+    const page: any = data?.data?.orders;
+    const edges = (page?.edges ?? []) as any[];
 
-  // Helper to extract array from REST response
-  const getOrdersFrom = (resp: any): any[] => resp?.data?.orders || resp?.body?.orders || resp?.orders || [];
+    hasNextPage = !!page?.pageInfo?.hasNextPage;
+    cursor = page?.pageInfo?.endCursor ?? null;
 
-  let resp: any = await admin.rest.get({ path: "/orders.json", query: baseQuery });
-  // Some clients put pageInfo on resp.pageInfo; also Link header can be present. We'll reuse client pagination helper when available
-  // Process first page
-  let ordersPage: any[] = getOrdersFrom(resp);
-  while (true) {
-    for (const o of ordersPage) {
+    for (const e of edges) {
+      const o = e.node;
       orders += 1;
 
-      const curr: MoneyLike = o?.current_total_price_set?.shop_money || {};
-      const sub: MoneyLike = o?.subtotal_price_set?.shop_money || {};
-      const disc: MoneyLike = o?.total_discounts_set?.shop_money || {};
-      const tax: MoneyLike = o?.total_tax_set?.shop_money || {};
-      const ship: MoneyLike = o?.total_shipping_price_set?.shop_money || {};
+      const curr: MoneyLike = o.currentTotalPriceSet?.shopMoney || {};
+      const sub: MoneyLike = o.subtotalPriceSet?.shopMoney || {};
+      const disc: MoneyLike = o.totalDiscountsSet?.shopMoney || {};
+      const tax: MoneyLike = o.totalTaxSet?.shopMoney || {};
+      const ship: MoneyLike = o.totalShippingPriceSet?.shopMoney || {};
 
-      if (!currency && curr.currencyCode) currency = curr.currencyCode || o?.currency || null;
+      if (!currency && curr.currencyCode) currency = curr.currencyCode || null;
 
       total_sales += toNum(curr.amount);
       gross_sales += toNum(sub.amount);
@@ -161,16 +171,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       const refundsArr: any[] = o?.refunds ?? [];
       for (const refund of refundsArr) {
-        const rlis: any[] = refund?.refund_line_items ?? [];
-        for (const rli of rlis) {
+        const rlis: any[] = refund?.refundLineItems?.edges ?? [];
+        for (const rliEdge of rlis) {
+          const rli = rliEdge?.node;
           const qty = toNum(rli?.quantity);
-          const price = toNum(rli?.line_item?.price_set?.shop_money?.amount);
+          const price = toNum(rli?.lineItem?.originalUnitPriceSet?.shopMoney?.amount);
           total_returns += qty * price;
         }
       }
 
-      const custId: string | null = o?.customer?.id || null;
-      const ordersCount: number = o?.customer?.orders_count ?? 0;
+      const custId: string | null = o.customer?.id || null;
+      const ordersCount: number = o.customer?.numberOfOrders ?? 0;
       if (custId) customerSet.add(custId);
       if (ordersCount <= 1) {
         orders_first_time += 1;
@@ -180,7 +191,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         total_sales_returning += toNum(curr.amount);
       }
 
-      const { utm_campaign, utm_medium, utm_source } = parseUTMs(o?.landing_site, o?.landing_site_ref, o?.referring_site);
+      const { utm_campaign, utm_medium, utm_source } = parseUTMs(o?.landingSite, o?.landingSiteRef, o?.referringSite);
       const campaign = utm_campaign || "(not set)";
       const medium = utm_medium || "(not set)";
       const source = utm_source || "(not set)";
@@ -234,25 +245,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         stats.total_sales_returning += orderAmount;
       }
     }
-    // Next page: rely on client pagination if available
-    const nextLink: any = resp?.pageInfo?.nextPageUrl || resp?.headers?.get?.("link") || null;
-    if (resp?.pageInfo?.nextPageQuery) {
-      resp = await admin.rest.get({ path: "/orders.json", query: resp.pageInfo.nextPageQuery });
-      ordersPage = getOrdersFrom(resp);
-      if (!ordersPage.length) break;
-      continue;
-    }
-    if (nextLink && typeof nextLink === "string") {
-      // Fallback: parse page_info from link
-      const m = nextLink.match(/page_info=([^&>]+)/);
-      const page_info = m ? decodeURIComponent(m[1]) : undefined;
-      if (!page_info) break;
-      resp = await admin.rest.get({ path: "/orders.json", query: { ...baseQuery, page_info } });
-      ordersPage = getOrdersFrom(resp);
-      if (!ordersPage.length) break;
-      continue;
-    }
-    break;
   }
 
   const average_order_value = orders ? total_sales / orders : 0;
