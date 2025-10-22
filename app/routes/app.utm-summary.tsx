@@ -109,20 +109,32 @@ export default function UtmSummaryPage() {
                   <DataTable
                     columnContentTypes={[
                       "text", "text", "numeric", "numeric", "numeric", "numeric", 
-                      "numeric", "numeric", "numeric", "numeric", "numeric"
+                      "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
+                      "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
+                      "numeric", "numeric", "numeric"
                     ]}
                     headings={[
                       "Order UTM campaign",
                       "Order UTM medium",
                       "Total sales",
                       "Orders",
-                      "Customers",
-                      "Gross sales",
+                      "Average order value",
                       "Net sales",
+                      "Gross sales",
                       "Discounts",
+                      "Returns",
                       "Taxes",
                       "Shipping",
-                      "Returns"
+                      "Total returns",
+                      "Sales (first-time)",
+                      "Sales (returning)",
+                      "Orders (first-time)",
+                      "Orders (returning)",
+                      "New customers",
+                      "Returning customers",
+                      "Amount spent / customer",
+                      "# orders / customer",
+                      "Returning customer rate"
                     ]}
                     rows={buildUTMRows(data)}
                     increasedTableDensity
@@ -144,34 +156,67 @@ function buildUTMRows(d: any): Array<Array<string | number>> {
   
   // Summary row first
   const s = d.summary;
+  const summaryAOV = s.orders ? s.total_sales / s.orders : 0;
+  const summaryAmtPerCust = s.customers ? s.total_sales / s.customers : 0;
+  const summaryOrdersPerCust = s.customers ? s.orders / s.customers : 0;
+  
   rows.push([
     "Summary",
     "",
     fmtMoney(s.total_sales, curr),
     fmtNum(s.orders),
-    fmtNum(s.customers),
-    fmtMoney(s.gross_sales, curr),
+    fmtMoney(summaryAOV, curr),
     fmtMoney(s.net_sales, curr),
+    fmtMoney(s.gross_sales, curr),
     fmtMoney(s.discounts, curr),
+    fmtMoney(0, curr), // returns (kept as 0 per original spec)
     fmtMoney(s.taxes, curr),
     fmtMoney(s.total_shipping_charges, curr),
     fmtMoney(s.total_returns, curr),
+    fmtMoney(s.total_sales_first_time, curr),
+    fmtMoney(s.total_sales_returning, curr),
+    fmtNum(s.orders_first_time),
+    fmtNum(s.orders_returning),
+    fmtNum(s.new_customers),
+    fmtNum(s.returning_customers),
+    fmtMoney(summaryAmtPerCust, curr),
+    fmtNum(summaryOrdersPerCust),
+    fmtPct(s.returning_customer_rate),
   ]);
 
   // Each UTM combination
   for (const utm of d.utmRows || []) {
+    const aov = utm.orders ? utm.total_sales / utm.orders : 0;
+    const amtPerCust = utm.customers ? utm.total_sales / utm.customers : 0;
+    const ordersPerCust = utm.customers ? utm.orders / utm.customers : 0;
+    const returningRate = (utm.orders_first_time + utm.orders_returning) 
+      ? (utm.orders_returning / (utm.orders_first_time + utm.orders_returning)) * 100 
+      : 0;
+    const newCustomers = utm.orders_first_time;
+    const returningCustomers = Math.max(0, utm.customers - newCustomers);
+    
     rows.push([
       utm.campaign,
       utm.medium,
       fmtMoney(utm.total_sales, curr),
       fmtNum(utm.orders),
-      fmtNum(utm.customers),
-      fmtMoney(utm.gross_sales, curr),
+      fmtMoney(aov, curr),
       fmtMoney(utm.net_sales, curr),
+      fmtMoney(utm.gross_sales, curr),
       fmtMoney(utm.discounts, curr),
+      fmtMoney(0, curr), // returns (kept as 0 per original spec)
       fmtMoney(utm.taxes, curr),
       fmtMoney(utm.shipping, curr),
       fmtMoney(utm.returns, curr),
+      fmtMoney(utm.total_sales_first_time, curr),
+      fmtMoney(utm.total_sales_returning, curr),
+      fmtNum(utm.orders_first_time),
+      fmtNum(utm.orders_returning),
+      fmtNum(newCustomers),
+      fmtNum(returningCustomers),
+      fmtMoney(amtPerCust, curr),
+      fmtNum(ordersPerCust),
+      fmtPct(returningRate),
     ]);
   }
   

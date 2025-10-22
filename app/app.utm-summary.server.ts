@@ -94,6 +94,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     customers: Set<string>;
     orders_first_time: number;
     orders_returning: number;
+    total_sales_first_time: number;
+    total_sales_returning: number;
   };
   const utmMap = new Map<string, UTMStats>();
 
@@ -170,11 +172,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           customers: new Set(),
           orders_first_time: 0,
           orders_returning: 0,
+          total_sales_first_time: 0,
+          total_sales_returning: 0,
         });
       }
       const stats = utmMap.get(key)!;
+      const orderAmount = toNum(curr.amount);
       stats.orders += 1;
-      stats.total_sales += toNum(curr.amount);
+      stats.total_sales += orderAmount;
       stats.gross_sales += toNum(sub.amount);
       {
         const discAmt = toNum(disc.amount);
@@ -195,8 +200,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       if (custId) stats.customers.add(custId);
       if (ordersCount <= 1) {
         stats.orders_first_time += 1;
+        stats.total_sales_first_time += orderAmount;
       } else {
         stats.orders_returning += 1;
+        stats.total_sales_returning += orderAmount;
       }
     }
   }
@@ -229,6 +236,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     customers: s.customers.size,
     orders_first_time: s.orders_first_time,
     orders_returning: s.orders_returning,
+    total_sales_first_time: round(s.total_sales_first_time),
+    total_sales_returning: round(s.total_sales_returning),
   }));
 
   // Sort by total_sales descending
