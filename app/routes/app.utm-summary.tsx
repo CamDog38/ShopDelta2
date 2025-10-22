@@ -74,21 +74,62 @@ export default function UtmSummaryPage() {
     <Page title="Campaign Analytics">
       <Layout>
         <Layout.Section>
-          <Card>
-            <Box padding="400">
-              <InlineStack gap="400" align="start">
-                <div style={{ width: 220 }}>
-                  <TextField label="Since (YYYY-MM-DD)" value={since} onChange={(v) => setSince(v)} autoComplete="off" />
+          <div style={{ background: 'var(--p-color-bg-surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
+            <Text as="h3" variant="headingSm" tone="subdued">Date Range & Filters</Text>
+            <div style={{ marginTop: '16px' }}>
+              <InlineStack gap="300" wrap align="end">
+                <div style={{ minWidth: '140px' }}>
+                  <Text as="span" variant="bodySm" tone="subdued">Time Period</Text>
+                  <select 
+                    defaultValue={"last30"}
+                    style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
+                    onChange={(e) => {
+                      const preset = e.target.value;
+                      const now = new Date();
+                      const utcNow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+                      let start: Date, end: Date;
+                      switch (preset) {
+                        case 'last7':
+                          end = utcNow; start = new Date(utcNow); start.setUTCDate(start.getUTCDate() - 6); break;
+                        case 'last30':
+                          end = utcNow; start = new Date(utcNow); start.setUTCDate(start.getUTCDate() - 29); break;
+                        case 'thisMonth':
+                          start = new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), 1)); end = utcNow; break;
+                        case 'lastMonth': {
+                          const firstThis = new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), 1));
+                          start = new Date(Date.UTC(firstThis.getUTCFullYear(), firstThis.getUTCMonth() - 1, 1));
+                          end = new Date(Date.UTC(firstThis.getUTCFullYear(), firstThis.getUTCMonth(), 0));
+                          break;
+                        }
+                        case 'ytd':
+                          start = new Date(Date.UTC(utcNow.getUTCFullYear(), 0, 1)); end = utcNow; break;
+                        default:
+                          return; // custom
+                      }
+                      setSince(start.toISOString().slice(0, 10));
+                      setUntil(end.toISOString().slice(0, 10));
+                    }}
+                  >
+                    <option value="last7">Last 7 days</option>
+                    <option value="last30">Last 30 days</option>
+                    <option value="thisMonth">This month</option>
+                    <option value="lastMonth">Last month</option>
+                    <option value="ytd">Year to date</option>
+                    <option value="custom">Custom range</option>
+                  </select>
                 </div>
-                <div style={{ width: 220 }}>
-                  <TextField label="Until (YYYY-MM-DD)" value={until} onChange={(v) => setUntil(v)} autoComplete="off" />
+                <div style={{ minWidth: '120px' }}>
+                  <Text as="span" variant="bodySm" tone="subdued">Start Date</Text>
+                  <input type="date" value={since} onChange={(e) => setSince(e.target.value)} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
                 </div>
-                <div>
-                  <Button variant="primary" loading={loading} onClick={onApply}>Run</Button>
+                <div style={{ minWidth: '120px' }}>
+                  <Text as="span" variant="bodySm" tone="subdued">End Date</Text>
+                  <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
                 </div>
+                <Button variant="primary" loading={loading} onClick={onApply}>Apply Filters</Button>
               </InlineStack>
-            </Box>
-          </Card>
+            </div>
+          </div>
         </Layout.Section>
 
         {error && (
