@@ -249,7 +249,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const topProducts = Array.from(counts.entries())
       .map(([id, { title, quantity }]) => ({ id, title, quantity }))
       .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 10);
+      .slice(0, 50);
 
     const salesByProduct = new Map<string, number>();
     for (const [bKey] of pivot.entries()) {
@@ -264,19 +264,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const topProductsBySales = Array.from(salesByProduct.entries())
       .map(([id, sales]) => ({ id, title: productSet.get(id)?.title || id, sales }))
       .sort((a, b) => b.sales - a.sales)
-      .slice(0, 10);
+      .slice(0, 50);
 
     const series = Array.from(buckets.entries())
       .map(([key, v]) => ({ key, label: v.label, quantity: v.quantity, sales: bucketSales.get(key) || 0 }))
       .sort((a, b) => (a.key > b.key ? 1 : -1));
 
-    const top5Ids = topProducts.slice(0, 5).map((p) => p.id);
+    // Choose which products to chart based on selected metric
+    const LEGEND_LIMIT = 12;
+    const qtyIds = topProducts.map((p) => p.id);
+    const salesIds = topProductsBySales.map((p) => p.id);
+    let topIds = (chartMetric === 'sales' ? salesIds : qtyIds).slice(0, LEGEND_LIMIT);
+    // Ensure focused product is included if selected
+    if (productFocus && productFocus !== 'all' && productSet.has(productFocus) && !topIds.includes(productFocus)) {
+      topIds = [productFocus, ...topIds].slice(0, LEGEND_LIMIT);
+    }
+
     const seriesProduct = series.map((s) => {
       const row = pivot.get(s.key) || new Map<string, number>();
       const bucketQty = buckets.get(s.key)?.quantity || 1;
       const bucketAmt = bucketSales.get(s.key) || 0;
       const per: Record<string, { qty: number; sales: number; title: string }> = {};
-      for (const pid of top5Ids) {
+      for (const pid of topIds) {
         const q = row.get(pid) || 0;
         const alloc = (q / bucketQty) * bucketAmt;
         per[pid] = { qty: q, sales: alloc, title: productSet.get(pid)?.title || pid };
@@ -284,7 +293,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return { key: s.key, label: s.label, per };
     });
 
-    const seriesProductLines = top5Ids.map((pid) => ({
+    const seriesProductLines = topIds.map((pid) => ({
       id: pid,
       title: productSet.get(pid)?.title || pid,
       points: series.map((s) => {
@@ -789,7 +798,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       comparisonHeaders,
       seriesProduct,
       seriesProductLines,
-      productLegend: top5Ids.map((id) => ({ id, title: productSet.get(id)?.title || id, sku: productSet.get(id)?.sku || "" })),
+      productLegend: topIds.map((id) => ({ id, title: productSet.get(id)?.title || id, sku: productSet.get(id)?.sku || "" })),
       momMonths,
       filters: {
         start: fmtYMD(start!),
