@@ -101,15 +101,35 @@ export default function UtmSummaryPage() {
           </Layout.Section>
         )}
 
-        {data && (
+        {data && data.campaigns && data.campaigns.length > 0 && (
           <Layout.Section>
             <Card>
               <Box padding="400">
-                <Scrollable shadow style={{ maxHeight: 420 }}>
+                <Scrollable shadow style={{ maxHeight: 500 }}>
                   <DataTable
-                    columnContentTypes={["text", "text"]}
-                    headings={["Metric", "Value"]}
-                    rows={buildRows(data)}
+                    columnContentTypes={["text", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"]}
+                    headings={[
+                      "Campaign",
+                      "Orders",
+                      "Total Sales",
+                      "AOV",
+                      "Gross Sales",
+                      "Net Sales",
+                      "Discounts",
+                      "Taxes",
+                      "Shipping",
+                      "Returns",
+                      "FT Orders",
+                      "RT Orders",
+                      "FT Sales",
+                      "RT Sales",
+                      "New Customers",
+                      "Returning Customers",
+                      "Spent/Customer",
+                      "Orders/Customer",
+                      "RT Rate %",
+                    ]}
+                    rows={buildCampaignRows(data)}
                     increasedTableDensity
                     stickyHeader
                   />
@@ -123,29 +143,33 @@ export default function UtmSummaryPage() {
   );
 }
 
-function buildRows(d: any): Array<[string, string]> {
-  const rows: Array<[string, string]> = [];
-  rows.push(["Orders", fmtNum(d.orders)]);
-  rows.push(["Total sales", fmtMoney(d.total_sales, d.currency)]);
-  rows.push(["Average order value", fmtMoney(d.average_order_value, d.currency)]);
-  rows.push(["Gross sales", fmtMoney(d.gross_sales, d.currency)]);
-  rows.push(["Net sales", fmtMoney(d.net_sales, d.currency)]);
-  rows.push(["Discounts", fmtMoney(d.discounts, d.currency)]);
-  rows.push(["Taxes", fmtMoney(d.taxes, d.currency)]);
-  rows.push(["Shipping", fmtMoney(d.total_shipping_charges, d.currency)]);
-  rows.push(["Total returns", fmtMoney(d.total_returns, d.currency)]);
-  rows.push(["Orders (first-time)", fmtNum(d.orders_first_time)]);
-  rows.push(["Orders (returning)", fmtNum(d.orders_returning)]);
-  rows.push(["Sales (first-time)", fmtMoney(d.total_sales_first_time, d.currency)]);
-  rows.push(["Sales (returning)", fmtMoney(d.total_sales_returning, d.currency)]);
-  rows.push(["New customers", fmtNum(d.new_customers)]);
-  rows.push(["Returning customers", fmtNum(d.returning_customers)]);
-  rows.push(["Amount spent / customer", fmtMoney(d.amount_spent_per_customer, d.currency)]);
-  rows.push(["# orders / customer", fmtNum(d.number_of_orders_per_customer)]);
-  rows.push(["Returning customer rate", fmtPct(d.returning_customer_rate)]);
-  rows.push(["Top UTM campaign", d.order_utm_campaign || "-"]);
-  rows.push(["Top UTM medium", d.order_utm_medium || "-"]);
-  rows.push(["Currency", d.currency || "-"]);
+function buildCampaignRows(d: any): Array<Array<string | number>> {
+  const rows: Array<Array<string | number>> = [];
+  if (!d.campaigns) return rows;
+  
+  for (const c of d.campaigns) {
+    rows.push([
+      c.campaign || "-",
+      fmtNum(c.orders),
+      fmtMoney(c.total_sales, d.currency),
+      fmtMoney(c.average_order_value, d.currency),
+      fmtMoney(c.gross_sales, d.currency),
+      fmtMoney(c.net_sales, d.currency),
+      fmtMoney(c.discounts, d.currency),
+      fmtMoney(c.taxes, d.currency),
+      fmtMoney(c.total_shipping_charges, d.currency),
+      fmtMoney(c.total_returns, d.currency),
+      fmtNum(c.orders_first_time),
+      fmtNum(c.orders_returning),
+      fmtMoney(c.total_sales_first_time, d.currency),
+      fmtMoney(c.total_sales_returning, d.currency),
+      fmtNum(c.new_customers),
+      fmtNum(c.returning_customers),
+      fmtMoney(c.amount_spent_per_customer, d.currency),
+      fmtNum(c.number_of_orders_per_customer),
+      fmtPct(c.returning_customer_rate),
+    ]);
+  }
   return rows;
 }
 
