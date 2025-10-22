@@ -11,7 +11,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return json({ error: "Missing 'since' or 'until' query param (YYYY-MM-DD)" }, { status: 400 });
   }
 
-  const { admin } = await authenticate.admin(request);
+  // Robust auth: return JSON 401 instead of HTML redirect when session is missing
+  let admin: any;
+  try {
+    ({ admin } = await authenticate.admin(request));
+  } catch (e: any) {
+    if (e instanceof Response) {
+      return json({ error: "REAUTH_REQUIRED", message: "Admin session required" }, { status: 401 });
+    }
+    throw e;
+  }
 
   type MoneyLike = { amount?: string | number | null; currencyCode?: string | null };
   const toNum = (x: any) => (x == null ? 0 : typeof x === "string" ? parseFloat(x) : (x as number) || 0);
@@ -215,13 +224,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
       stats.taxes += toNum(tax.amount);
       stats.shipping += toNum(ship.amount);
-      // Add returns from refunds
+      // Add returns from refunds (REST shape)
       for (const refund of refundsArr) {
-        const rlis: any[] = refund?.refundLineItems?.edges ?? [];
-        for (const rliEdge of rlis) {
-          const rli = rliEdge?.node;
+        const rlis: any[] = refund?.refund_line_items ?? [];
+        for (const rli of rlis) {
           const qty = toNum(rli?.quantity);
-          const price = toNum(rli?.lineItem?.originalUnitPriceSet?.shopMoney?.amount);
+          const price = toNum(rli?.line_item?.price_set?.shop_money?.amount);
           stats.returns += qty * price;
         }
       }
