@@ -21,9 +21,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           node {
             id
             createdAt
-            landingSite
-            landingSiteRef
-            referringSite
+            customerJourneySummary {
+              lastVisit {
+                landingPage
+                referrerUrl
+                utmParameters { source medium campaign term content }
+              }
+            }
             currentTotalPriceSet { shopMoney { amount currencyCode } }
             subtotalPriceSet { shopMoney { amount } }
             totalDiscountsSet { shopMoney { amount } }
@@ -48,38 +52,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   type MoneyLike = { amount?: string | number | null; currencyCode?: string | null };
   const toNum = (x: any) => (x == null ? 0 : typeof x === "string" ? parseFloat(x) : (x as number) || 0);
 
-  const parseUTMs = (landingSite?: string | null, landingSiteRef?: string | null, referringSite?: string | null) => {
-    let utm_campaign: string | null = null;
-    let utm_medium: string | null = null;
-    let utm_source: string | null = null;
-    
-    // Priority 1: landingSiteRef (query string Shopify parsed)
-    if (landingSiteRef) {
+  const parseUTMs = (
+    landingPage?: string | null,
+    referrerUrl?: string | null,
+    utm?: { source?: string | null; medium?: string | null; campaign?: string | null; term?: string | null; content?: string | null } | null
+  ) => {
+    let utm_campaign: string | null = utm?.campaign ?? null;
+    let utm_medium: string | null = utm?.medium ?? null;
+    let utm_source: string | null = utm?.source ?? null;
+
+    // Fallback: parse from landingPage query string
+    if ((!utm_campaign || !utm_medium || !utm_source) && landingPage) {
       try {
-        const q = new URLSearchParams(landingSiteRef);
-        if (q.get("utm_campaign")) utm_campaign = q.get("utm_campaign");
-        if (q.get("utm_medium")) utm_medium = q.get("utm_medium");
-        if (q.get("utm_source")) utm_source = q.get("utm_source");
+        const full = landingPage.startsWith("http") ? landingPage : `https://example.com${landingPage}`;
+        const q = new URL(full).searchParams;
+        if (!utm_campaign && q.get("utm_campaign")) utm_campaign = q.get("utm_campaign");
+        if (!utm_medium && q.get("utm_medium")) utm_medium = q.get("utm_medium");
+        if (!utm_source && q.get("utm_source")) utm_source = q.get("utm_source");
       } catch {}
     }
-    
-    // Priority 2: landingSite (full path with query string)
-    if (!utm_campaign || !utm_medium || !utm_source) {
-      if (landingSite) {
-        try {
-          const full = landingSite.startsWith("http") ? landingSite : `https://example.com${landingSite}`;
-          const q = new URL(full).searchParams;
-          if (!utm_campaign && q.get("utm_campaign")) utm_campaign = q.get("utm_campaign");
-          if (!utm_medium && q.get("utm_medium")) utm_medium = q.get("utm_medium");
-          if (!utm_source && q.get("utm_source")) utm_source = q.get("utm_source");
-        } catch {}
-      }
-    }
-    
-    // Priority 3: referringSite (external referrer for medium/source inference)
-    if (!utm_medium && referringSite) {
-      // Basic referrer-to-medium mapping
-      const ref = referringSite.toLowerCase();
+
+    // Fallback: infer medium/source from referrerUrl when medium is missing
+    if (!utm_medium && referrerUrl) {
+      const ref = referrerUrl.toLowerCase();
       if (ref.includes("facebook.com") || ref.includes("fb.com")) {
         utm_medium = utm_medium || "social";
         utm_source = utm_source || "facebook";
@@ -92,11 +87,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       } else if (ref.includes("twitter.com") || ref.includes("t.co")) {
         utm_medium = utm_medium || "social";
         utm_source = utm_source || "twitter";
-      } else if (referringSite) {
+      } else {
         utm_medium = utm_medium || "referral";
       }
     }
-    
+
     return { utm_campaign, utm_medium, utm_source };
   };
 
@@ -191,10 +186,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         total_sales_returning += toNum(curr.amount);
       }
 
-      const { utm_campaign, utm_medium, utm_source } = parseUTMs(o?.landingSite, o?.landingSiteRef, o?.referringSite);
+      const { utm_campaign, utm_medium, utm_source } = parseUTMs(
+        o?.customerJourneySummary?.lastVisit?.landingPage,
+        o?.customerJourneySummary?.lastVisit?.referrerUrl,
+        o?.customerJourneySummary?.lastVisit?.utmParameters
+      );
       const campaign = utm_campaign || "(not set)";
       const medium = utm_medium || "(not set)";
-      const source = utm_source || "(not set)";
       const key = `${campaign}|${medium}`;
 
       if (!utmMap.has(key)) {
