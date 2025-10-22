@@ -1,23 +1,18 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { authenticate } from "../../shopify.server";
+import { authenticate } from "./shopify.server";
 
-/**
- * GET /api/utm-summary?since=YYYY-MM-DD&until=YYYY-MM-DD
- * Optional: cursor (for manual pagination testing)
- */
+// GET /app/api/utm-summary?since=YYYY-MM-DD&until=YYYY-MM-DD
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const since = url.searchParams.get("since");
   const until = url.searchParams.get("until");
-
   if (!since || !until) {
     return json({ error: "Missing 'since' or 'until' query param (YYYY-MM-DD)" }, { status: 400 });
   }
 
   const { admin } = await authenticate.admin(request);
 
-  // GraphQL query based on your example
   const QUERY = `#graphql
     query OrdersWithUTMs($cursor: String) {
       orders(first: 250, after: $cursor, query: "__RANGE__") {
@@ -36,21 +31,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             customer { id numberOfOrders }
             refunds {
               refundLineItems(first: 100) {
-                edges {
-                  node {
-                    quantity
-                    lineItem { originalUnitPriceSet { shopMoney { amount } } }
-                  }
-                }
+                edges { node { quantity lineItem { originalUnitPriceSet { shopMoney { amount } } } } }
               }
             }
             lineItems(first: 100) {
-              edges {
-                node {
-                  quantity
-                  originalUnitPriceSet { shopMoney { amount } }
-                }
-              }
+              edges { node { quantity originalUnitPriceSet { shopMoney { amount } } } }
             }
           }
         }
@@ -80,12 +65,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let cursor: string | null = null;
   let hasNextPage = true;
 
-  let total_sales = 0; // sum(currentTotalPrice)
-  let gross_sales = 0; // sum(subtotal)
-  let discounts = 0;  // sum(totalDiscounts) (reported as negative in the summary)
-  let taxes = 0;      // sum(totalTax)
-  let total_shipping_charges = 0; // sum(totalShippingPrice)
-  let total_returns = 0; // computed from refund line items
+  let total_sales = 0;
+  let gross_sales = 0;
+  let discounts = 0;
+  let taxes = 0;
+  let total_shipping_charges = 0;
+  let total_returns = 0;
   let orders = 0;
   let currency: string | null = null;
 
@@ -94,7 +79,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let total_sales_first_time = 0;
   let total_sales_returning = 0;
   const customerSet = new Set<string>();
-  // staff-assisted rate removed (GraphQL field not available)
 
   const utmCampaignCounts = new Map<string, number>();
   const utmMediumCounts = new Map<string, number>();
@@ -124,7 +108,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       total_sales += toNum(curr.amount);
       gross_sales += toNum(sub.amount);
-      // Make discounts negative (e.g., -70.58)
       {
         const discAmt = toNum(disc.amount);
         if (discAmt !== 0) discounts += -discAmt;
@@ -132,7 +115,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       taxes += toNum(tax.amount);
       total_shipping_charges += toNum(ship.amount);
 
-      // Returns: approximate using refund line items originalUnitPrice * qty
       const refundsArr: any[] = o?.refunds ?? [];
       for (const refund of refundsArr) {
         const rlis: any[] = refund?.refundLineItems?.edges ?? [];
@@ -144,7 +126,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
 
-      // First-time vs returning
       const custId: string | null = o.customer?.id || null;
       const ordersCount: number = o.customer?.numberOfOrders ?? 0;
       if (custId) customerSet.add(custId);
@@ -156,7 +137,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         total_sales_returning += toNum(curr.amount);
       }
 
-      // UTM extraction
       const { utm_campaign, utm_medium } = parseUTMs(o?.customerJourneySummary?.lastVisit?.landingPage);
       if (utm_campaign) utmCampaignCounts.set(utm_campaign, (utmCampaignCounts.get(utm_campaign) || 0) + 1);
       if (utm_medium) utmMediumCounts.set(utm_medium, (utmMediumCounts.get(utm_medium) || 0) + 1);
@@ -168,19 +148,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const amount_spent_per_customer = total_sales / unique_customers;
   const number_of_orders_per_customer = orders / unique_customers;
   const new_customers = orders_first_time;
-  const returning_customers = Math.max(0, customerSet.size - new_customers); // approximation
-  const returning_customer_rate = (new_customers + returning_customers) ? (returning_customers / (new_customers + returning_customers)) * 100 : 0;
+  const returning_customers = Math.max(0, customerSet.size - new_customers);
+  const returning_customer_rate = (new_customers + returning_customers)
+    ? (returning_customers / (new_customers + returning_customers)) * 100
+    : 0;
+  const net_sales = gross_sales + discounts;
 
-  // Campaign/medium modes
-  const top = <T extends string>(m: Map<T, number>): T | null => {
-    let best: T | null = null; let bestN = -1;
-    for (const [k, v] of m.entries()) {
-      if (v > bestN) { best = k; bestN = v; }
-    }
-    return best;
-  };
-
-  const net_sales = gross_sales + discounts; // sample shows discounts negative and net = gross + discounts
+  const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
   return json({
     order_utm_campaign: top(utmCampaignCounts),
@@ -191,7 +165,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     net_sales: round(net_sales),
     gross_sales: round(gross_sales),
     discounts: round(discounts),
-    returns: round(0), // keep explicit returns 0.00 in output example; use total_returns if desired
+    returns: round(0),
     taxes: round(taxes),
     total_shipping_charges: round(total_shipping_charges),
     total_returns: round(total_returns),
@@ -204,11 +178,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     amount_spent_per_customer: round(amount_spent_per_customer),
     number_of_orders_per_customer: round(number_of_orders_per_customer),
     returning_customer_rate: round(returning_customer_rate),
-    // staff-assisted metric omitted
     currency: currency || null,
   });
 };
 
-function round(n: number) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
+function top<T extends string>(m: Map<T, number>): T | null {
+  let best: T | null = null; let bestN = -1;
+  for (const [k, v] of m.entries()) {
+    if (v > bestN) { best = k; bestN = v; }
+  }
+  return best;
 }
