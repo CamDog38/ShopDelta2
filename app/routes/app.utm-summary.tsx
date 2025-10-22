@@ -41,7 +41,7 @@ export default function UtmSummaryPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/utm-summary?${qs}`, { credentials: "same-origin" });
+      const res = await fetch(`/app/api/utm-summary?${qs}`, { credentials: "same-origin" });
       const ct = res.headers.get("content-type") || "";
       if (!ct.includes("application/json")) {
         const text = await res.text();
