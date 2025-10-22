@@ -1,6 +1,5 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "./shopify.server";
-import { createGDPRResponse, verifyWebhookRequest } from "./utils/webhook-verification";
 
 /**
  * GDPR Customer Redaction Webhook
@@ -12,25 +11,10 @@ import { createGDPRResponse, verifyWebhookRequest } from "./utils/webhook-verifi
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    // First verify HMAC signature
-    const { isValid, rawBody } = await verifyWebhookRequest(request);
-    
-    if (!isValid) {
-      console.error("Invalid HMAC signature for customers/redact webhook");
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    // Create a new request with the raw body for Shopify SDK authentication
-    const clonedRequest = new Request(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: rawBody,
-    });
-
     // Authenticate webhook using Shopify's built-in verification
-    const { payload, session, topic, shop } = await authenticate.webhook(clonedRequest);
+    const { payload, topic, shop } = await authenticate.webhook(request);
     
-    console.log(`Received ${topic} webhook for ${shop} (HMAC verified)`);
+    console.log(`Received ${topic} webhook for ${shop}`);
     console.log("Customer redaction payload:", JSON.stringify(payload, null, 2));
 
     // Log the request for audit purposes
@@ -49,12 +33,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     
     console.log(`Customer data redaction completed for customer ${customerId} in shop ${shop}`);
 
-    return createGDPRResponse("No customer data retained. Nothing to delete.");
+    return new Response("Customer data redaction completed.", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    });
     
   } catch (error) {
     console.error("Error processing customers/redact webhook:", error);
     
-    // Still return success to prevent Shopify retries for legitimate requests
-    return createGDPRResponse("No customer data retained. Nothing to delete.");
+    // Return 200 to prevent Shopify retries for legitimate requests
+    return new Response("Customer data redaction completed.", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    });
   }
 };

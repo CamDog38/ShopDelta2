@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { authenticate, sessionStorage } from "./shopify.server";
-import { createGDPRResponse, verifyWebhookRequest } from "./utils/webhook-verification";
+import { authenticate } from "./shopify.server";
+import prisma from "./db.server";
 
 /**
  * GDPR Shop Redaction Webhook
@@ -12,25 +12,10 @@ import { createGDPRResponse, verifyWebhookRequest } from "./utils/webhook-verifi
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    // First verify HMAC signature
-    const { isValid, rawBody } = await verifyWebhookRequest(request);
-    
-    if (!isValid) {
-      console.error("Invalid HMAC signature for shop/redact webhook");
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    // Create a new request with the raw body for Shopify SDK authentication
-    const clonedRequest = new Request(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: rawBody,
-    });
-
     // Authenticate webhook using Shopify's built-in verification
-    const { payload, session, topic, shop } = await authenticate.webhook(clonedRequest);
+    const { payload, topic, shop } = await authenticate.webhook(request);
     
-    console.log(`Received ${topic} webhook for ${shop} (HMAC verified)`);
+    console.log(`Received ${topic} webhook for ${shop}`);
     console.log("Shop redaction payload:", JSON.stringify(payload, null, 2));
 
     const shopId = payload.shop_id;
@@ -40,21 +25,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Delete all shop-related data
     try {
-      // 1. Delete all sessions for this shop from Redis-backed storage
-      if (typeof (sessionStorage as any).deleteShopSessions === "function") {
-        await (sessionStorage as any).deleteShopSessions(shopDomain);
-        console.log(`Deleted sessions for shop: ${shopDomain}`);
-      }
+      // 1. Delete all sessions for this shop from Prisma storage
+      await prisma.session.deleteMany({
+        where: { shop: shopDomain },
+      });
+      console.log(`Deleted sessions for shop: ${shopDomain}`);
 
-      // 2. If we had a database, we would delete shop-specific data here:
+      // 2. Delete any other shop-specific data from your database:
       // - Delete analytics data for this shop
       // - Delete any cached product information
       // - Delete any shop preferences or settings
       // - Delete any webhook configurations
       
-      // Example (if using a database):
-      // await db.analytics.deleteMany({ where: { shopDomain } });
-      // await db.shopSettings.deleteMany({ where: { shopDomain } });
+      // Example (add your own tables here):
+      // await prisma.analytics.deleteMany({ where: { shopDomain } });
+      // await prisma.shopSettings.deleteMany({ where: { shopDomain } });
       
       console.log(`Shop data redaction completed for shop ${shopDomain} (ID: ${shopId})`);
       
@@ -63,12 +48,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // Continue processing - we still want to return success
     }
 
-    return createGDPRResponse(`Shop data deleted successfully for ${shopDomain}.`);
+    return new Response(`Shop data deleted successfully for ${shopDomain}.`, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    });
     
   } catch (error) {
     console.error("Error processing shop/redact webhook:", error);
     
-    // Still return success to prevent Shopify retries for legitimate requests
-    return createGDPRResponse("Shop data deletion completed.");
+    // Return 200 to prevent Shopify retries for legitimate requests
+    return new Response("Shop data deletion completed.", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    });
   }
 };
