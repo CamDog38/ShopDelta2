@@ -42,20 +42,6 @@ export default function UtmSummaryPage() {
     setError(null);
     try {
       const res = await fetch(`/app/api/utm-summary?${qs}`, { credentials: "same-origin" });
-      if (res.status === 401) {
-        // Auto-reauth like Analytics: top-level redirect to a helper route
-        const search = new URLSearchParams(window.location.search);
-        const host = search.get("host") ?? undefined;
-        const base = "/app/reauth";
-        const reauthUrl = host ? `${base}?host=${encodeURIComponent(host)}` : base;
-        try {
-          if (window.top) (window.top as Window).location.assign(reauthUrl);
-          else window.location.assign(reauthUrl);
-        } catch {
-          window.location.assign(reauthUrl);
-        }
-        return;
-      }
       const ct = res.headers.get("content-type") || "";
       if (!ct.includes("application/json")) {
         const text = await res.text();
