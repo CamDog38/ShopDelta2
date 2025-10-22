@@ -4,7 +4,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { Page, Card, Layout, Text, InlineStack, Box, Button, TextField } from "@shopify/polaris";
 
-export const meta: MetaFunction = () => [{ title: "UTM Summary" }];
+export const meta: MetaFunction = () => [{ title: "Campaign Analytics" }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -60,7 +60,7 @@ export default function UtmSummaryPage() {
   };
 
   return (
-    <Page title="UTM Summary">
+    <Page title="Campaign Analytics">
       <Layout>
         <Layout.Section>
           <Card>
