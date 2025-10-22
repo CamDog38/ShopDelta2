@@ -3,10 +3,13 @@ import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { Page, Card, Layout, Text, InlineStack, Box, Button, TextField } from "@shopify/polaris";
+import { authenticate } from "../shopify.server";
 
 export const meta: MetaFunction = () => [{ title: "Campaign Analytics" }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // Ensure app is authenticated (will redirect to /auth if needed)
+  await authenticate.admin(request);
   const url = new URL(request.url);
   const since = url.searchParams.get("since");
   const until = url.searchParams.get("until");
@@ -38,7 +41,15 @@ export default function UtmSummaryPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/utm-summary?${qs}`);
+      const res = await fetch(`/api/utm-summary?${qs}`, { credentials: "same-origin" });
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        const text = await res.text();
+        // Common case: auth redirect HTML when scopes/session missing
+        throw new Error(
+          "Unexpected non-JSON response from server. This often happens when the app requires re-authentication or updated scopes. Please re-open the app (which will re-auth) and try again."
+        );
+      }
       const j = await res.json();
       if (!res.ok && j?.error) throw new Error(j.error);
       setData(j);
