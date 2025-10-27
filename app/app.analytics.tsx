@@ -1174,7 +1174,7 @@ export default function AnalyticsPage() {
             <DataTable
               columnContentTypes={["numeric", "text", "numeric"]}
               headings={["#", "Product", "Sales"]}
-              rows={topBySales.map((p, i) => [String(i + 1), p.title, fmtMoney(p.sales)])}
+              rows={topBySales.slice(0, 10).map((p, i) => [String(i + 1), p.title, fmtMoney(p.sales)])}
             />
           </>
         )}
