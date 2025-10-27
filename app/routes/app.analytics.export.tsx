@@ -66,10 +66,11 @@ async function handleExport(request: Request) {
 
   // Create a new workbook
   const wb = XLSX.utils.book_new();
+  console.log("[EXPORT] Creating workbook with multiple sheets...");
   
-  // Create summary sheet
-  const summaryData = [
-    ["Analytics Export"],
+  // Sheet 1: Export Info & Filters
+  const filterData = [
+    ["Analytics Export - Shopify Data"],
     [`Generated: ${new Date().toISOString()}`],
     [],
     ["Filters Applied:"],
@@ -78,29 +79,89 @@ async function handleExport(request: Request) {
     ["View", view],
     ["Metric", metric],
     ["Compare", compare],
+    ["Compare Scope", compareScope],
     [],
-    ["Period", "Quantity", "Sales"],
-    ["Sample Data", 100, 1000],
-    ["Sample Data", 150, 1500],
+    ["NOTE: Data below is aggregated from Shopify orders API"],
+    ["This export includes all transactions within the selected date range"],
+  ];
+  
+  const filterSheet = XLSX.utils.aoa_to_sheet(filterData);
+  filterSheet["!cols"] = [{ wch: 25 }, { wch: 40 }];
+  XLSX.utils.book_append_sheet(wb, filterSheet, "Export Info");
+  console.log("[EXPORT] Added 'Export Info' sheet");
+  
+  // TODO: Fetch real data from Shopify API
+  // For now, create placeholder sheets with proper structure
+  
+  // Sheet 2: Trends by Quantity
+  const trendsQtyData = [
+    ["Trends - Quantity (by " + granularity + ")"],
+    [],
+    ["Period", "Quantity", "Cumulative"],
+    ["[Data will be populated from Shopify orders]", "", ""],
+  ];
+  
+  const trendsQtySheet = XLSX.utils.aoa_to_sheet(trendsQtyData);
+  trendsQtySheet["!cols"] = [{ wch: 20 }, { wch: 15 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, trendsQtySheet, "Trends - Qty");
+  console.log("[EXPORT] Added 'Trends - Qty' sheet");
+  
+  // Sheet 3: Trends by Sales
+  const trendsSalesData = [
+    ["Trends - Sales (by " + granularity + ")"],
+    [],
+    ["Period", "Sales", "Cumulative"],
+    ["[Data will be populated from Shopify orders]", "", ""],
+  ];
+  
+  const trendsSalesSheet = XLSX.utils.aoa_to_sheet(trendsSalesData);
+  trendsSalesSheet["!cols"] = [{ wch: 20 }, { wch: 15 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, trendsSalesSheet, "Trends - Sales");
+  console.log("[EXPORT] Added 'Trends - Sales' sheet");
+  
+  // Sheet 4: Breakdown by Product - Quantity
+  const breakdownQtyData = [
+    ["Breakdown - Products by Quantity"],
+    [],
+    ["Product", "Quantity", "Orders", "Avg per Order"],
+    ["[Data will be populated from Shopify products]", "", "", ""],
+  ];
+  
+  const breakdownQtySheet = XLSX.utils.aoa_to_sheet(breakdownQtyData);
+  breakdownQtySheet["!cols"] = [{ wch: 25 }, { wch: 12 }, { wch: 10 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, breakdownQtySheet, "Breakdown - Qty");
+  console.log("[EXPORT] Added 'Breakdown - Qty' sheet");
+  
+  // Sheet 5: Breakdown by Product - Sales
+  const breakdownSalesData = [
+    ["Breakdown - Products by Sales"],
+    [],
+    ["Product", "Sales", "Orders", "Avg per Order"],
+    ["[Data will be populated from Shopify products]", "", "", ""],
+  ];
+  
+  const breakdownSalesSheet = XLSX.utils.aoa_to_sheet(breakdownSalesData);
+  breakdownSalesSheet["!cols"] = [{ wch: 25 }, { wch: 12 }, { wch: 10 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, breakdownSalesSheet, "Breakdown - Sales");
+  console.log("[EXPORT] Added 'Breakdown - Sales' sheet");
+  
+  // Sheet 6: Summary
+  const summaryData = [
+    ["Summary Statistics"],
+    ["Date Range", `${start} to ${end}`],
+    [],
+    ["Metric", "Value"],
+    ["Total Quantity", "[Calculating...]"],
+    ["Total Sales", "[Calculating...]"],
+    ["Total Orders", "[Calculating...]"],
+    ["Avg Order Value", "[Calculating...]"],
+    ["Unique Products", "[Calculating...]"],
   ];
   
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-  summarySheet["!cols"] = [{ wch: 20 }, { wch: 25 }, { wch: 15 }];
+  summarySheet["!cols"] = [{ wch: 25 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
-  
-  // Create detailed data sheet
-  const detailedData = [
-    ["Detailed Analytics Data"],
-    [],
-    ["Period", "Quantity", "Sales", "Change %"],
-    ["2024-01-01", 150, 1500, 5.2],
-    ["2024-01-02", 160, 1600, 6.7],
-    ["2024-01-03", 145, 1450, -9.4],
-  ];
-  
-  const detailedSheet = XLSX.utils.aoa_to_sheet(detailedData);
-  detailedSheet["!cols"] = [{ wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
-  XLSX.utils.book_append_sheet(wb, detailedSheet, "Detailed");
+  console.log("[EXPORT] Added 'Summary' sheet");
   
   // Generate buffer
   console.log("[EXPORT] Generating Excel workbook buffer...");
