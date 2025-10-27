@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
-import { loader as analyticsLoader } from "../app.analytics.server";
+import { computeYoYAnnualAggregate } from "../analytics.yoy.server";
 
 // Support both GET and POST
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -22,7 +22,7 @@ async function handleExport(request: Request) {
   
   try {
     console.log("[EXPORT] Attempting authentication...");
-    const authResult = await authenticate.admin(request);
+    var { admin } = await authenticate.admin(request);
     console.log("[EXPORT] Authentication successful");
   } catch (error) {
     // Shopify auth throws a Response object (redirect) on auth failure
@@ -60,21 +60,84 @@ async function handleExport(request: Request) {
 
   console.log("[EXPORT] Filter parameters:", { start, end, granularity, view, metric });
 
-  // Fetch real analytics data
-  console.log("[EXPORT] Fetching analytics data...");
-  const analyticsResponse = await analyticsLoader({ 
-    request, 
-    params: {}, 
-    context: {} as any 
-  });
-  const analyticsData: any = await analyticsResponse.json();
-  console.log("[EXPORT] Analytics data fetched successfully");
-  
-  // Check if there was an error
-  if (analyticsData.error) {
-    console.error("[EXPORT] Analytics data error:", analyticsData.error);
-    return json({ error: "Failed to fetch analytics data", details: analyticsData.message || analyticsData.error }, { status: 500 });
+  // Collect full analytics directly from Shopify
+  const ORDERS_QUERY = `#graphql
+    query AnalyticsRecentOrders($first: Int!, $search: String, $after: String) {
+      orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true, query: $search) {
+        pageInfo { hasNextPage }
+        edges {
+          cursor
+          node {
+            id
+            processedAt
+            lineItems(first: 100) {
+              edges { node { quantity discountedTotalSet { shopMoney { amount currencyCode } } product { id title } title } }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  function startOfWeek(d: Date) { const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); const dow = dt.getUTCDay(); const diff = (dow + 6) % 7; dt.setUTCDate(dt.getUTCDate() - diff); return dt; }
+  function startOfMonth(d: Date) { return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
+  function ymd(d: Date) { return d.toISOString().slice(0, 10); }
+
+  const sDate = start ? new Date(start + 'T00:00:00.000Z') : undefined;
+  const eDate = end ? new Date(end + 'T23:59:59.999Z') : undefined;
+  const search = `processed_at:>='${sDate?.toISOString()}' processed_at:<='${eDate?.toISOString()}'`;
+  console.log('[EXPORT] Shopify search:', search);
+
+  const counts = new Map<string, { title: string; qty: number; sales: number }>();
+  const dayMap = new Map<string, { label: string; qty: number; sales: number }>();
+  const weekMap = new Map<string, { label: string; qty: number; sales: number }>();
+  const monthMap = new Map<string, { label: string; qty: number; sales: number }>();
+  let totalQty = 0; let totalSales = 0; let currencyCode: string | null = null;
+
+  let after: string | null = null;
+  while (true) {
+    const res: Response = await admin.graphql(ORDERS_QUERY, { variables: { first: 250, search, after } });
+    const data = await res.json();
+    const page = (data as any)?.data?.orders;
+    const edges = page?.edges ?? [];
+    for (const edge of edges) {
+      const processedAt: string = edge?.node?.processedAt;
+      const d = new Date(processedAt);
+      const dayKey = ymd(d);
+      const ws = startOfWeek(d); const weekKey = `W:${ymd(ws)}`; const weekLabel = `Week of ${ws.toLocaleDateString('en-CA')}`;
+      const ms = startOfMonth(d); const monthKey = `${ms.getUTCFullYear()}-${String(ms.getUTCMonth()+1).padStart(2,'0')}`; const monthLabel = `${ms.toLocaleString('en-US',{month:'short'})} ${ms.getUTCFullYear()}`;
+      if (!dayMap.has(dayKey)) dayMap.set(dayKey, { label: dayKey, qty: 0, sales: 0 });
+      if (!weekMap.has(weekKey)) weekMap.set(weekKey, { label: weekLabel, qty: 0, sales: 0 });
+      if (!monthMap.has(monthKey)) monthMap.set(monthKey, { label: monthLabel, qty: 0, sales: 0 });
+      const liEdges = edge?.node?.lineItems?.edges ?? [];
+      for (const li of liEdges) {
+        const qty: number = li?.node?.quantity ?? 0;
+        const amountStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+        const curr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.currencyCode as any;
+        const amt = amountStr ? parseFloat(amountStr) : 0;
+        if (!currencyCode && curr) currencyCode = curr;
+        const p = li?.node?.product;
+        const fallbackTitle: string = li?.node?.title ?? 'Unknown product';
+        const pid: string = p?.id ?? `li:${fallbackTitle}`;
+        const title: string = p?.title ?? fallbackTitle;
+        if (!counts.has(pid)) counts.set(pid, { title, qty: 0, sales: 0 });
+        const acc = counts.get(pid)!; acc.qty += qty; acc.sales += amt;
+        totalQty += qty; totalSales += amt;
+        dayMap.get(dayKey)!.qty += qty; dayMap.get(dayKey)!.sales += amt;
+        weekMap.get(weekKey)!.qty += qty; weekMap.get(weekKey)!.sales += amt;
+        monthMap.get(monthKey)!.qty += qty; monthMap.get(monthKey)!.sales += amt;
+      }
+    }
+    if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
   }
+
+  const allProductsQty = Array.from(counts.values()).map(v => ({ title: v.title, quantity: v.qty })).sort((a,b)=> b.quantity - a.quantity);
+  const allProductsSales = Array.from(counts.values()).map(v => ({ title: v.title, sales: v.sales })).sort((a,b)=> b.sales - a.sales);
+  const toSeries = (mp: Map<string,{label:string;qty:number;sales:number}>) => Array.from(mp.entries()).map(([k,v])=>({ key:k, label:v.label, qty:v.qty, sales:v.sales })).sort((a,b)=> (a.key > b.key ? 1 : -1));
+  const seriesDay = toSeries(dayMap);
+  const seriesWeek = toSeries(weekMap);
+  const seriesMonth = toSeries(monthMap);
+  const series = granularity === 'week' ? seriesWeek : granularity === 'month' ? seriesMonth : seriesDay;
 
   // Dynamically import xlsx to avoid Vite bundling issues
   console.log("[EXPORT] Importing xlsx library...");
@@ -102,75 +165,50 @@ async function handleExport(request: Request) {
     ["This export includes all transactions within the selected date range"],
   ];
   
-  const filterSheet = XLSX.utils.aoa_to_sheet(filterData);
+  const filterSheet = XLSX.utils.aoa_to_sheet(filterData as any[]);
   filterSheet["!cols"] = [{ wch: 25 }, { wch: 40 }];
   XLSX.utils.book_append_sheet(wb, filterSheet, "Export Info");
   console.log("[EXPORT] Added 'Export Info' sheet");
   
   // Sheet 2: Trends by Quantity
-  const trendsQtyData = [
+  const trendsQtyData: any[][] = [
     ["Trends - Quantity (by " + granularity + ")"],
+    ["Date Range", `${start} to ${end}`],
     [],
     ["Period", "Quantity"],
   ];
   
   // Add real data from analytics
-  if (analyticsData.series && Array.isArray(analyticsData.series)) {
-    analyticsData.series.forEach((item: any) => {
-      trendsQtyData.push([item.label || item.key, item.quantity || 0]);
-    });
-  }
+  series.forEach((item: any) => { trendsQtyData.push([item.label || item.key, item.qty || 0]); });
   
   const trendsQtySheet = XLSX.utils.aoa_to_sheet(trendsQtyData);
   trendsQtySheet["!cols"] = [{ wch: 20 }, { wch: 15 }];
   XLSX.utils.book_append_sheet(wb, trendsQtySheet, "Trends - Qty");
-  console.log("[EXPORT] Added 'Trends - Qty' sheet with", analyticsData.series?.length || 0, "data points");
+  console.log("[EXPORT] Added 'Trends - Qty' sheet with", series.length, "data points");
   
   // Sheet 3: Trends by Sales
-  const trendsSalesData = [
+  const trendsSalesData: any[][] = [
     ["Trends - Sales (by " + granularity + ")"],
+    ["Date Range", `${start} to ${end}`],
     [],
     ["Period", "Sales"],
   ];
   
   // Add real data from analytics
-  if (analyticsData.series && Array.isArray(analyticsData.series)) {
-    analyticsData.series.forEach((item: any) => {
-      trendsSalesData.push([item.label || item.key, item.sales || 0]);
-    });
-  }
+  series.forEach((item: any) => { trendsSalesData.push([item.label || item.key, item.sales || 0]); });
   
   const trendsSalesSheet = XLSX.utils.aoa_to_sheet(trendsSalesData);
   trendsSalesSheet["!cols"] = [{ wch: 20 }, { wch: 15 }];
   XLSX.utils.book_append_sheet(wb, trendsSalesSheet, "Trends - Sales");
-  console.log("[EXPORT] Added 'Trends - Sales' sheet with", analyticsData.series?.length || 0, "data points");
+  console.log("[EXPORT] Added 'Trends - Sales' sheet with", series.length, "data points");
   
   // Sheet 4: All Products by Quantity
-  const breakdownQtyData = [
+  const breakdownQtyData: any[][] = [
     ["All Products - Quantity"],
+    ["Date Range", `${start} to ${end}`],
     [],
     ["Rank", "Product", "Quantity"],
   ];
-  
-  // Extract ALL products from table data (which has complete product breakdown)
-  const allProductsQty: Array<{title: string, quantity: number}> = [];
-  if (analyticsData.table && Array.isArray(analyticsData.table)) {
-    // Aggregate quantities across all time periods for each product
-    const productTotals = new Map<string, number>();
-    analyticsData.table.forEach((row: any) => {
-      Object.keys(row).forEach(key => {
-        if (key !== 'key' && key !== 'label' && typeof row[key] === 'number') {
-          const currentTotal = productTotals.get(key) || 0;
-          productTotals.set(key, currentTotal + row[key]);
-        }
-      });
-    });
-    
-    productTotals.forEach((quantity, title) => {
-      allProductsQty.push({ title, quantity });
-    });
-    allProductsQty.sort((a, b) => b.quantity - a.quantity);
-  }
   
   // Add all products to sheet
   allProductsQty.forEach((product, index) => {
@@ -183,20 +221,12 @@ async function handleExport(request: Request) {
   console.log("[EXPORT] Added 'All Products - Qty' sheet with", allProductsQty.length, "products");
   
   // Sheet 5: All Products by Sales  
-  const breakdownSalesData = [
+  const breakdownSalesData: any[][] = [
     ["All Products - Sales"],
+    ["Date Range", `${start} to ${end}`],
     [],
     ["Rank", "Product", "Sales"],
   ];
-  
-  // Use topProductsBySales which should have all products sorted by sales
-  // Note: We'll need to enhance this to get ALL products, not just top 50
-  const allProductsSales: Array<{title: string, sales: number}> = [];
-  if (analyticsData.topProductsBySales && Array.isArray(analyticsData.topProductsBySales)) {
-    analyticsData.topProductsBySales.forEach((product: any) => {
-      allProductsSales.push({ title: product.title, sales: product.sales || 0 });
-    });
-  }
   
   allProductsSales.forEach((product, index) => {
     breakdownSalesData.push([index + 1, product.title, product.sales]);
@@ -208,7 +238,7 @@ async function handleExport(request: Request) {
   console.log("[EXPORT] Added 'All Products - Sales' sheet with", allProductsSales.length, "products");
   
   // Sheet 6: Summary - Top 10 and Bottom 10
-  const summaryData: any[] = [
+  const summaryData: any[][] = [
     ["Summary - Top & Bottom Performers"],
     ["Date Range", `${start} to ${end}`],
     [],
@@ -257,63 +287,60 @@ async function handleExport(request: Request) {
   console.log("[EXPORT] Added 'Summary' sheet with top/bottom 10 products");
   
   // Sheet 7: Breakdown by Day
-  const dayBreakdownData: any[] = [
-    ["Breakdown by Day"],
-    [],
-    ["Date", "Quantity", "Sales"],
-  ];
-  
-  if (analyticsData.series && Array.isArray(analyticsData.series)) {
-    analyticsData.series.forEach((item: any) => {
-      dayBreakdownData.push([item.label || item.key, item.quantity || 0, item.sales || 0]);
-    });
-  }
-  
+  const dayBreakdownData: any[][] = [["Breakdown by Day"],["Date Range", `${start} to ${end}`],[],["Date","Quantity","Sales"]];
+  seriesDay.forEach((item: any) => { dayBreakdownData.push([item.label || item.key, item.qty || 0, item.sales || 0]); });
   const dayBreakdownSheet = XLSX.utils.aoa_to_sheet(dayBreakdownData);
   dayBreakdownSheet["!cols"] = [{ wch: 20 }, { wch: 15 }, { wch: 15 }];
   XLSX.utils.book_append_sheet(wb, dayBreakdownSheet, "By Day");
   console.log("[EXPORT] Added 'By Day' sheet");
   
-  // Sheet 8: Compare - YTD vs Previous YTD (Year)
-  const compareYearData: any[] = [
-    ["Compare - YTD vs Previous Year YTD"],
-    [],
-    ["Period", "Current YTD Qty", "Previous YTD Qty", "Current YTD Sales", "Previous YTD Sales"],
-  ];
-  
-  // Use YoY data if available
-  if (analyticsData.yoyCurrMonths && Array.isArray(analyticsData.yoyCurrMonths)) {
-    compareYearData.push(["Year to Date", 
-      analyticsData.totals?.qty || 0, 
-      analyticsData.yoyPrevTotal?.qty || 0,
-      analyticsData.totals?.sales || 0,
-      analyticsData.yoyPrevTotal?.sales || 0
-    ]);
+  // Sheet 8: Breakdown by Week
+  const weekBreakdownData: any[][] = [["Breakdown by Week"],["Date Range", `${start} to ${end}`],[],["Week","Quantity","Sales"]];
+  seriesWeek.forEach((item: any) => { weekBreakdownData.push([item.label, item.qty, item.sales]); });
+  const weekBreakdownSheet = XLSX.utils.aoa_to_sheet(weekBreakdownData);
+  weekBreakdownSheet["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, weekBreakdownSheet, "By Week");
+  console.log("[EXPORT] Added 'By Week' sheet");
+
+  // Sheet 9: Breakdown by Month
+  const monthBreakdownData: any[][] = [["Breakdown by Month"],["Date Range", `${start} to ${end}`],[],["Month","Quantity","Sales"]];
+  seriesMonth.forEach((item: any) => { monthBreakdownData.push([item.label, item.qty, item.sales]); });
+  const monthBreakdownSheet = XLSX.utils.aoa_to_sheet(monthBreakdownData);
+  monthBreakdownSheet["!cols"] = [{ wch: 18 }, { wch: 15 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, monthBreakdownSheet, "By Month");
+  console.log("[EXPORT] Added 'By Month' sheet");
+
+  // Sheet 10: Compare - MoM (matches app layout)
+  const momHeaders = ["Period", "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%", "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%"]; 
+  const momData: any[][] = [["Month-over-Month Comparison"],["Date Range", `${start} to ${end}`],[], momHeaders];
+  for (let i = 1; i < seriesMonth.length; i++) {
+    const prev = seriesMonth[i - 1];
+    const curr = seriesMonth[i];
+    const qd = (curr.qty || 0) - (prev.qty || 0);
+    const sd = (curr.sales || 0) - (prev.sales || 0);
+    momData.push([`${prev.label} → ${curr.label}`, curr.qty || 0, prev.qty || 0, qd, prev.qty ? ((qd / prev.qty) * 100) : null, curr.sales || 0, prev.sales || 0, sd, prev.sales ? ((sd / prev.sales) * 100) : null]);
   }
-  
-  const compareYearSheet = XLSX.utils.aoa_to_sheet(compareYearData);
-  compareYearSheet["!cols"] = [{ wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
-  XLSX.utils.book_append_sheet(wb, compareYearSheet, "Compare - Year");
-  console.log("[EXPORT] Added 'Compare - Year' sheet");
-  
-  // Sheet 9: Compare - Months YTD
-  const compareMonthsData: any[] = [
-    ["Compare - Months YTD (Current Period)"],
-    [],
-    ["Month", "Quantity", "Sales"],
-  ];
-  
-  // Use month-by-month YoY data if available
-  if (analyticsData.yoyCurrMonths && Array.isArray(analyticsData.yoyCurrMonths)) {
-    analyticsData.yoyCurrMonths.forEach((month: any) => {
-      compareMonthsData.push([month.label || month.key, month.quantity || 0, month.sales || 0]);
-    });
+  const momSheet = XLSX.utils.aoa_to_sheet(momData);
+  momSheet["!cols"] = [{ wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, momSheet, "Compare - MoM");
+  console.log("[EXPORT] Added 'Compare - MoM' sheet");
+
+  // Sheet 11: Compare - Year (YTD vs previous YTD)
+  try {
+    const now = eDate || new Date();
+    const yearB = now.getUTCFullYear();
+    const yearA = yearB - 1;
+    const yoy = await computeYoYAnnualAggregate({ admin, yearA, yearB, ytd: true });
+    const ytdEnd = `${yearB}-${String((now.getUTCMonth()+1)).padStart(2,'0')}-${String(now.getUTCDate()).padStart(2,'0')}`;
+    const yoyData: any[][] = [["Year-over-Year (YTD)"],["Date Range", `${yearB}-01-01 to ${ytdEnd}`],[], yoy.headers];
+    yoy.table.forEach((r: any) => yoyData.push([r.period, r.qtyCurr, r.qtyPrev, r.qtyDelta, r.qtyDeltaPct, r.salesCurr, r.salesPrev, r.salesDelta, r.salesDeltaPct]));
+    const yoySheet = XLSX.utils.aoa_to_sheet(yoyData);
+    yoySheet["!cols"] = [{ wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, yoySheet, "Compare - Year");
+    console.log("[EXPORT] Added 'Compare - Year' sheet");
+  } catch (e) {
+    console.warn('[EXPORT] YoY computation failed:', (e as any)?.message || e);
   }
-  
-  const compareMonthsSheet = XLSX.utils.aoa_to_sheet(compareMonthsData);
-  compareMonthsSheet["!cols"] = [{ wch: 20 }, { wch: 15 }, { wch: 15 }];
-  XLSX.utils.book_append_sheet(wb, compareMonthsSheet, "Compare - Months");
-  console.log("[EXPORT] Added 'Compare - Months' sheet");
   
   // Generate buffer
   console.log("[EXPORT] Generating Excel workbook buffer...");

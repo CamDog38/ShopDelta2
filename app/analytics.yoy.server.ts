@@ -101,8 +101,13 @@ export async function computeYoYAnnualAggregate(params: YoYAnnualParams): Promis
   const upToMonth = ytd ? Math.max(1, now.getUTCMonth() + 1) : 12;
   const upToDay = ytd ? Math.max(1, now.getUTCDate()) : undefined;
 
-  const { monthly: mA, totalQty: totQtyA, totalSales: totSalesA, start: sA, end: eA } = await fetchYearBuckets(admin, yearA, upToMonth, upToDay);
-  const { monthly: mB, totalQty: totQtyB, totalSales: totSalesB, start: sB, end: eB } = await fetchYearBuckets(admin, yearB, upToMonth, upToDay);
+  // Fetch both years concurrently to reduce total latency while respecting per-query pagination
+  const [resA, resB] = await Promise.all([
+    fetchYearBuckets(admin, yearA, upToMonth, upToDay),
+    fetchYearBuckets(admin, yearB, upToMonth, upToDay),
+  ]);
+  const { monthly: mA, totalQty: totQtyA, totalSales: totSalesA, start: sA, end: eA } = resA;
+  const { monthly: mB, totalQty: totQtyB, totalSales: totSalesB, start: sB, end: eB } = resB;
 
   const months: string[] = [];
   for (let m = 1; m <= upToMonth; m++) months.push(String(m).padStart(2, "0"));
@@ -196,8 +201,11 @@ export async function computeYoYAnnualProduct(params: YoYAnnualParams) {
     return counts;
   }
 
-  const prev = await fetchTotalsPerProduct(startA, endA);
-  const curr = await fetchTotalsPerProduct(startB, endB);
+  // Fetch prev and current year product totals concurrently
+  const [prev, curr] = await Promise.all([
+    fetchTotalsPerProduct(startA, endA),
+    fetchTotalsPerProduct(startB, endB),
+  ]);
 
   const keys = new Set<string>([...prev.keys(), ...curr.keys()]);
   const rows: Array<Record<string, any>> = [];
@@ -298,53 +306,61 @@ export async function computeYoYMonthlyAggregate(params: {
   };
 
   const search = `processed_at:>='${start.toISOString()}' processed_at:<='${end.toISOString()}'`;
-  let after: string | null = null;
-  const monthlyCurr = new Map<string, { label: string; qty: number; sales: number }>();
-  while (true) {
-    const res: Response = await admin.graphql(ORDERS_QUERY, { variables: { first: 250, search, after } });
-    const data = await res.json();
-    const edges = (data as any)?.data?.orders?.edges ?? [];
-    for (const e of edges) {
-      const d = new Date(e?.node?.processedAt);
-      const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-      if (!monthlyCurr.has(mKey)) monthlyCurr.set(mKey, { label: monthLabel(d.getUTCFullYear(), d.getUTCMonth()+1), qty: 0, sales: 0 });
-      const liEdges = e?.node?.lineItems?.edges ?? [];
-      for (const li of liEdges) {
-        const q = li?.node?.quantity ?? 0;
-        const amtStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-        const amt = amtStr ? parseFloat(amtStr) : 0;
-        monthlyCurr.get(mKey)!.qty += q; monthlyCurr.get(mKey)!.sales += amt;
-      }
-    }
-    const page = (data as any)?.data?.orders;
-    if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-  }
-
-  // Build previous-year map for the in-range months
   const prevStart = new Date(start); prevStart.setUTCFullYear(prevStart.getUTCFullYear() - 1);
   const prevEnd = new Date(end); prevEnd.setUTCFullYear(prevEnd.getUTCFullYear() - 1);
   const prevSearch = `processed_at:>='${prevStart.toISOString()}' processed_at:<='${prevEnd.toISOString()}'`;
-  after = null;
-  const monthlyPrev = new Map<string, { qty: number; sales: number }>();
-  while (true) {
-    const res: Response = await admin.graphql(ORDERS_QUERY, { variables: { first: 250, search: prevSearch, after } });
-    const data = await res.json();
-    const edges = (data as any)?.data?.orders?.edges ?? [];
-    for (const e of edges) {
-      const d = new Date(e?.node?.processedAt);
-      const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-      if (!monthlyPrev.has(mKey)) monthlyPrev.set(mKey, { qty: 0, sales: 0 });
-      const liEdges = e?.node?.lineItems?.edges ?? [];
-      for (const li of liEdges) {
-        const q = li?.node?.quantity ?? 0;
-        const amtStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
-        const amt = amtStr ? parseFloat(amtStr) : 0;
-        const acc = monthlyPrev.get(mKey)!; acc.qty += q; acc.sales += amt;
+
+  // Build both current and previous maps concurrently
+  const buildMonthlyCurr = async () => {
+    let after: string | null = null;
+    const mp = new Map<string, { label: string; qty: number; sales: number }>();
+    while (true) {
+      const res: Response = await admin.graphql(ORDERS_QUERY, { variables: { first: 250, search, after } });
+      const data = await res.json();
+      const edges = (data as any)?.data?.orders?.edges ?? [];
+      for (const e of edges) {
+        const d = new Date(e?.node?.processedAt);
+        const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+        if (!mp.has(mKey)) mp.set(mKey, { label: monthLabel(d.getUTCFullYear(), d.getUTCMonth()+1), qty: 0, sales: 0 });
+        const liEdges = e?.node?.lineItems?.edges ?? [];
+        for (const li of liEdges) {
+          const q = li?.node?.quantity ?? 0;
+          const amtStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+          const amt = amtStr ? parseFloat(amtStr) : 0;
+          mp.get(mKey)!.qty += q; mp.get(mKey)!.sales += amt;
+        }
       }
+      const page = (data as any)?.data?.orders;
+      if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
     }
-    const page = (data as any)?.data?.orders;
-    if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
-  }
+    return mp;
+  };
+  const buildMonthlyPrev = async () => {
+    let after: string | null = null;
+    const mp = new Map<string, { qty: number; sales: number }>();
+    while (true) {
+      const res: Response = await admin.graphql(ORDERS_QUERY, { variables: { first: 250, search: prevSearch, after } });
+      const data = await res.json();
+      const edges = (data as any)?.data?.orders?.edges ?? [];
+      for (const e of edges) {
+        const d = new Date(e?.node?.processedAt);
+        const mKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+        if (!mp.has(mKey)) mp.set(mKey, { qty: 0, sales: 0 });
+        const liEdges = e?.node?.lineItems?.edges ?? [];
+        for (const li of liEdges) {
+          const q = li?.node?.quantity ?? 0;
+          const amtStr: string | undefined = li?.node?.discountedTotalSet?.shopMoney?.amount as any;
+          const amt = amtStr ? parseFloat(amtStr) : 0;
+          const acc = mp.get(mKey)!; acc.qty += q; acc.sales += amt;
+        }
+      }
+      const page = (data as any)?.data?.orders;
+      if (page?.pageInfo?.hasNextPage) after = edges.length ? edges[edges.length - 1]?.cursor : null; else break;
+    }
+    return mp;
+  };
+
+  const [monthlyCurr, monthlyPrev] = await Promise.all([buildMonthlyCurr(), buildMonthlyPrev()]);
 
   const rows: Array<Record<string, any>> = [];
   let comparison: YoYResult["comparison"] = {
@@ -360,8 +376,10 @@ export async function computeYoYMonthlyAggregate(params: {
     const { y: yA, m: mA } = parseYM(yoyA);
     const { y: yB, m: mB } = parseYM(yoyB);
     const ra = monthRange(yA, mA); const rb = monthRange(yB, mB);
-    const prev = await fetchTotals(ra.s, ra.e);
-    const curr = await fetchTotals(rb.s, rb.e);
+    const [prev, curr] = await Promise.all([
+      fetchTotals(ra.s, ra.e),
+      fetchTotals(rb.s, rb.e),
+    ]);
     headers = ["Period", `Qty (${monthLabel(yB,mB)})`, `Qty (${monthLabel(yA,mA)})`, "Qty Δ", "Qty Δ%", `Sales (${monthLabel(yB,mB)})`, `Sales (${monthLabel(yA,mA)})`, "Sales Δ", "Sales Δ%"];
     comparison = {
       mode: "yoy",
@@ -397,8 +415,10 @@ export async function computeYoYMonthlyAggregate(params: {
     const eCurr = new Date(Date.UTC(y, mm - 1, day, 23, 59, 59, 999));
     const sPrev = new Date(Date.UTC(y - 1, mm - 1, 1));
     const ePrev = new Date(Date.UTC(y - 1, mm - 1, day, 23, 59, 59, 999));
-    const curr = await fetchTotals(sCurr, eCurr);
-    const prev = await fetchTotals(sPrev, ePrev);
+    const [curr, prev] = await Promise.all([
+      fetchTotals(sCurr, eCurr),
+      fetchTotals(sPrev, ePrev),
+    ]);
     const currLabel = monthLabel(y, mm);
     const prevLabel = monthLabel(y - 1, mm);
     headers = [
