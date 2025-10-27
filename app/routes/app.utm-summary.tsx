@@ -175,15 +175,67 @@ export default function UtmSummaryPage() {
           </Card>
         )}
 
-        {/* Summary Tiles */}
+        {/* UTM Breakdown Table */}
         {data && (
+          <div style={{ background: 'var(--p-color-bg-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
+            <Text as="h3" variant="headingSm">UTM Campaign Breakdown</Text>
+            <Box paddingBlockStart="400">
+              <div className="analytics-table-sticky">
+                <DataTable
+                  columnContentTypes={[
+                    "text", "text", "numeric", "numeric", "numeric", "numeric", 
+                    "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
+                    "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
+                    "numeric", "numeric", "numeric"
+                  ]}
+                  headings={[
+                    "Campaign",
+                    "Medium",
+                    "Total Sales",
+                    "Orders",
+                    "AOV",
+                    "Net Sales",
+                    "Gross Sales",
+                    "Discounts",
+                    "Returns",
+                    "Taxes",
+                    "Shipping",
+                    "Total Returns",
+                    "Sales (First-Time)",
+                    "Sales (Returning)",
+                    "Orders (First-Time)",
+                    "Orders (Returning)",
+                    "New Customers",
+                    "Returning Customers",
+                    "Spent / Customer",
+                    "Orders / Customer",
+                    "Returning Rate"
+                  ]}
+                  rows={buildUTMRows(data)}
+                  increasedTableDensity
+                />
+              </div>
+            </Box>
+          </div>
+        )}
+
+        {/* Summary Tiles - Linked to selected UTM */}
+        {data && selectedCampaign && selectedMedium && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <SummaryTile label="Total Sales" value={fmtMoney(data.summary.total_sales, data.currency)} />
-            <SummaryTile label="Orders" value={fmtNum(data.summary.orders)} />
-            <SummaryTile label="Customers" value={fmtNum(data.summary.customers)} />
-            <SummaryTile label="Avg Order Value" value={fmtMoney(data.summary.average_order_value, data.currency)} />
-            <SummaryTile label="New Customers" value={fmtNum(data.summary.new_customers)} />
-            <SummaryTile label="Returning Rate" value={fmtPct(data.summary.returning_customer_rate)} />
+            {(() => {
+              const utm = data.utmRows?.find((row: any) => row.campaign === selectedCampaign && row.medium === selectedMedium);
+              if (!utm) return null;
+              return (
+                <>
+                  <SummaryTile label="Total Sales" value={fmtMoney(utm.total_sales, data.currency)} />
+                  <SummaryTile label="Orders" value={fmtNum(utm.orders)} />
+                  <SummaryTile label="Customers" value={fmtNum(utm.customers)} />
+                  <SummaryTile label="Avg Order Value" value={fmtMoney(utm.orders ? utm.total_sales / utm.orders : 0, data.currency)} />
+                  <SummaryTile label="New Customers" value={fmtNum(utm.orders_first_time)} />
+                  <SummaryTile label="Returning Rate" value={fmtPct((utm.orders_first_time + utm.orders_returning) ? (utm.orders_returning / (utm.orders_first_time + utm.orders_returning)) * 100 : 0)} />
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -265,50 +317,6 @@ export default function UtmSummaryPage() {
             </Box>
           )}
         </div>
-
-        {/* UTM Breakdown Table */}
-        {data && (
-          <div style={{ background: 'var(--p-color-bg-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
-            <Text as="h3" variant="headingSm">UTM Campaign Breakdown</Text>
-            <Box paddingBlockStart="400">
-              <div className="analytics-table-sticky">
-                <DataTable
-                  columnContentTypes={[
-                    "text", "text", "numeric", "numeric", "numeric", "numeric", 
-                    "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
-                    "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
-                    "numeric", "numeric", "numeric"
-                  ]}
-                  headings={[
-                    "Campaign",
-                    "Medium",
-                    "Total Sales",
-                    "Orders",
-                    "AOV",
-                    "Net Sales",
-                    "Gross Sales",
-                    "Discounts",
-                    "Returns",
-                    "Taxes",
-                    "Shipping",
-                    "Total Returns",
-                    "Sales (First-Time)",
-                    "Sales (Returning)",
-                    "Orders (First-Time)",
-                    "Orders (Returning)",
-                    "New Customers",
-                    "Returning Customers",
-                    "Spent / Customer",
-                    "Orders / Customer",
-                    "Returning Rate"
-                  ]}
-                  rows={buildUTMRows(data)}
-                  increasedTableDensity
-                />
-              </div>
-            </Box>
-          </div>
-        )}
       </BlockStack>
     </Page>
   );
