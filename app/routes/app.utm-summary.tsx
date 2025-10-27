@@ -46,6 +46,17 @@ export default function UtmSummaryPage() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [productsData, setProductsData] = useState<any | null>(null);
+  // Ad spend state for ROAS (keyed by "campaign|medium")
+  const [spendMap, setSpendMap] = useState<Record<string, number>>({});
+  const spendObj = useMemo(() => {
+    const entries = Object.entries(spendMap).filter(([_, v]) => typeof v === 'number' && !isNaN(v) && v > 0);
+    return Object.fromEntries(entries);
+  }, [spendMap]);
+  const spendQS = useMemo(() => {
+    const keys = Object.keys(spendObj);
+    if (!keys.length) return '';
+    try { return `&spend=${encodeURIComponent(JSON.stringify(spendObj))}`; } catch { return ''; }
+  }, [spendObj]);
 
   const qs = useMemo(() => `since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`, [since, until]);
 
@@ -53,7 +64,7 @@ export default function UtmSummaryPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/app/api/utm-summary?${qs}`, { credentials: "same-origin" });
+      const res = await fetch(`/app/api/utm-summary?${qs}${spendQS}`, { credentials: "same-origin" });
       const ct = res.headers.get("content-type") || "";
       if (!ct.includes("application/json")) {
         const text = await res.text();
@@ -76,6 +87,33 @@ export default function UtmSummaryPage() {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Initialize spendMap from server data when available
+  useEffect(() => {
+    if (!data?.utmRows) return;
+    const next: Record<string, number> = {};
+    for (const utm of data.utmRows) {
+      const key = `${utm.campaign}|${utm.medium}`;
+      const v = Number(utm.ad_spend || 0);
+      if (v > 0) next[key] = v;
+    }
+    setSpendMap((prev) => ({ ...next, ...prev }));
+  }, [data]);
+
+  const commitSpend = (key: string, raw: string) => {
+    const n = Number(raw);
+    setSpendMap((prev) => {
+      const copy = { ...prev };
+      if (!isFinite(n) || n <= 0) {
+        delete copy[key];
+      } else {
+        copy[key] = Number(n.toFixed(2));
+      }
+      return copy;
+    });
+    // Re-run fetch with spend to compute server-side ROAS; UI also computes immediately
+    setTimeout(() => run(), 0);
+  };
 
   const onApply = () => {
     setSearchParams({ since, until });
@@ -175,45 +213,142 @@ export default function UtmSummaryPage() {
           </Card>
         )}
 
-        {/* UTM Breakdown Table */}
+        {/* UTM Breakdown Table with editable Ad Spend */}
         {data && (
           <div style={{ background: 'var(--p-color-bg-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
             <Text as="h3" variant="headingSm">UTM Campaign Breakdown</Text>
             <Box paddingBlockStart="400">
-              <div className="analytics-table-sticky">
-                <DataTable
-                  columnContentTypes={[
-                    "text", "text", "numeric", "numeric", "numeric", "numeric", 
-                    "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
-                    "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
-                    "numeric", "numeric", "numeric"
-                  ]}
-                  headings={[
-                    "Campaign",
-                    "Medium",
-                    "Total Sales",
-                    "Orders",
-                    "AOV",
-                    "Net Sales",
-                    "Gross Sales",
-                    "Discounts",
-                    "Returns",
-                    "Taxes",
-                    "Shipping",
-                    "Total Returns",
-                    "Sales (First-Time)",
-                    "Sales (Returning)",
-                    "Orders (First-Time)",
-                    "Orders (Returning)",
-                    "New Customers",
-                    "Returning Customers",
-                    "Spent / Customer",
-                    "Orders / Customer",
-                    "Returning Rate"
-                  ]}
-                  rows={buildUTMRows(data)}
-                  increasedTableDensity
-                />
+              <div className="analytics-table-sticky" style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--p-color-border)' }}>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: 600, minWidth: 160 }}>Campaign</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: 600, minWidth: 120 }}>Medium</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 120 }}>Total Sales</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 90 }}>Orders</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 120 }}>AOV</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 120 }}>Net Sales</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 120 }}>Gross Sales</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 110 }}>Discounts</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 110 }}>Returns</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 100 }}>Taxes</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 120 }}>Shipping</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 120 }}>Total Returns</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 140 }}>Sales (First-Time)</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 140 }}>Sales (Returning)</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 140 }}>Orders (First-Time)</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 140 }}>Orders (Returning)</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 120 }}>New Customers</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 160 }}>Returning Customers</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 140 }}>Spent / Customer</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 140 }}>Orders / Customer</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 130 }}>Returning Rate</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 150 }}>
+                        Ad Spend
+                        <span title="Enter ad spend per campaign|medium. Press Enter or tab out to recalc ROAS." style={{ marginLeft: 6, cursor: 'help', color: 'var(--p-color-text-subdued)' }}>ⓘ</span>
+                      </th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: 600, minWidth: 100 }}>ROAS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Summary row */}
+                    {(() => {
+                      const s = data.summary;
+                      const aov = s.orders ? s.total_sales / s.orders : 0;
+                      const amtPerCust = s.customers ? s.total_sales / s.customers : 0;
+                      const ordersPerCust = s.customers ? s.orders / s.customers : 0;
+                      const roasSummary = (() => {
+                        const ad = Object.values(spendObj).reduce((acc: number, v: any) => acc + (Number(v) || 0), 0);
+                        if (ad > 0) {
+                          const r = s.total_sales / ad; return `${(Math.round((r + Number.EPSILON) * 100) / 100).toFixed(2)}x`;
+                        }
+                        return data.summary.roas != null ? `${(Math.round((Number(data.summary.roas) + Number.EPSILON) * 100) / 100).toFixed(2)}x` : '-';
+                      })();
+                      return (
+                        <tr style={{ borderBottom: '1px solid var(--p-color-border)' }}>
+                          <td style={{ padding: '12px' }}>Summary</td>
+                          <td style={{ padding: '12px' }}></td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(s.total_sales, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(s.orders)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(aov, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(s.net_sales, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(s.gross_sales, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(s.discounts, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(0, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(s.taxes, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(s.total_shipping_charges, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(s.total_returns, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(s.total_sales_first_time, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(s.total_sales_returning, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(s.orders_first_time)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(s.orders_returning)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(s.new_customers)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(s.returning_customers)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(amtPerCust, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(ordersPerCust)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtPct(s.returning_customer_rate)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}></td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{roasSummary}</td>
+                        </tr>
+                      );
+                    })()}
+                    {/* Data rows */}
+                    {data.utmRows?.map((utm: any, idx: number) => {
+                      const key = `${utm.campaign}|${utm.medium}`;
+                      const adSpend = spendMap[key] ?? Number(utm.ad_spend || 0);
+                      const aov = utm.orders ? utm.total_sales / utm.orders : 0;
+                      const amtPerCust = utm.customers ? utm.total_sales / utm.customers : 0;
+                      const ordersPerCust = utm.customers ? utm.orders / utm.customers : 0;
+                      const returningRate = (utm.orders_first_time + utm.orders_returning) ? (utm.orders_returning / (utm.orders_first_time + utm.orders_returning)) * 100 : 0;
+                      const roas = adSpend > 0 ? `${(Math.round(((utm.total_sales / adSpend) + Number.EPSILON) * 100) / 100).toFixed(2)}x` : (utm.roas != null ? `${(Math.round((Number(utm.roas) + Number.EPSILON) * 100) / 100).toFixed(2)}x` : '-') ;
+                      return (
+                        <tr key={`${utm.campaign}|${utm.medium}|${idx}`} style={{ borderBottom: '1px solid var(--p-color-border)' }}>
+                          <td style={{ padding: '12px' }}>{utm.campaign}</td>
+                          <td style={{ padding: '12px' }}>{utm.medium}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.total_sales, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(utm.orders)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(aov, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.net_sales, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.gross_sales, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.discounts, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(0, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.taxes, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.shipping, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.returns, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.total_sales_first_time, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.total_sales_returning, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(utm.orders_first_time)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(utm.orders_returning)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(Math.max(0, utm.customers - utm.orders_first_time))}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(utm.customers)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(amtPerCust, data.currency)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(ordersPerCust)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtPct(returningRate)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>
+                            <input
+                              type="number"
+                              defaultValue={adSpend ? String(adSpend) : ''}
+                              inputMode="decimal"
+                              step="0.01"
+                              placeholder="0.00"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const val = (e.target as HTMLInputElement).value;
+                                  commitSpend(key, val);
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              onBlur={(e) => commitSpend(key, e.currentTarget.value)}
+                              style={{ width: 120, textAlign: 'right', padding: '6px 8px', border: '1px solid var(--p-color-border)', borderRadius: 6 }}
+                              title="Enter ad spend for this campaign & medium. Press Enter or click away to apply."
+                            />
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{roas}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </Box>
           </div>
@@ -337,6 +472,10 @@ export default function UtmSummaryPage() {
 function buildUTMRows(d: any): Array<Array<string | number>> {
   const rows: Array<Array<string | number>> = [];
   const curr = d.currency || "USD";
+  const fmtRoas = (n: number | null | undefined) => {
+    if (n == null || isNaN(Number(n))) return "-";
+    return `${(Math.round((Number(n) + Number.EPSILON) * 10000) / 10000).toFixed(2)}x`;
+  };
   
   // Summary row first
   const s = d.summary;
@@ -366,6 +505,7 @@ function buildUTMRows(d: any): Array<Array<string | number>> {
     fmtMoney(summaryAmtPerCust, curr),
     fmtNum(summaryOrdersPerCust),
     fmtPct(s.returning_customer_rate),
+    fmtRoas(s.roas),
   ]);
 
   // Each UTM combination
@@ -401,6 +541,7 @@ function buildUTMRows(d: any): Array<Array<string | number>> {
       fmtMoney(amtPerCust, curr),
       fmtNum(ordersPerCust),
       fmtPct(returningRate),
+      fmtRoas(utm.roas),
     ]);
   }
   

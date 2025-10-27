@@ -13,6 +13,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const { admin } = await authenticate.admin(request);
 
+  // Optional: ad spend mapping for ROAS. Pass as JSON string in `spend` query param
+  // Format: { "CampaignA|(not set)": 123.45, "MyCampaign|facebook": 456.78 }
+  // Keys are "campaign|medium" matching the rows below
+  const spendParam = url.searchParams.get("spend");
+  const spendMap = new Map<string, number>();
+  if (spendParam) {
+    try {
+      const obj = JSON.parse(spendParam);
+      if (obj && typeof obj === 'object') {
+        for (const [k, v] of Object.entries(obj as Record<string, any>)) {
+          const num = typeof v === 'number' ? v : parseFloat(String(v));
+          if (!isNaN(num)) spendMap.set(k, num);
+        }
+      }
+    } catch {}
+  }
+
   const QUERY = `#graphql
     query OrdersWithUTMs($cursor: String) {
       orders(first: 250, after: $cursor, query: "__RANGE__") {
@@ -259,26 +276,37 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
   // Build UTM breakdown rows
-  const utmRows = Array.from(utmMap.values()).map(s => ({
-    campaign: s.campaign,
-    medium: s.medium,
-    orders: s.orders,
-    total_sales: round(s.total_sales),
-    gross_sales: round(s.gross_sales),
-    net_sales: round(s.gross_sales + s.discounts),
-    discounts: round(s.discounts),
-    taxes: round(s.taxes),
-    shipping: round(s.shipping),
-    returns: round(s.returns),
-    customers: s.customers.size,
-    orders_first_time: s.orders_first_time,
-    orders_returning: s.orders_returning,
-    total_sales_first_time: round(s.total_sales_first_time),
-    total_sales_returning: round(s.total_sales_returning),
-  }));
+  const utmRows = Array.from(utmMap.values()).map(s => {
+    const key = `${s.campaign}|${s.medium}`;
+    const ad_spend = spendMap.get(key) || 0;
+    const roas = ad_spend > 0 ? s.total_sales / ad_spend : null;
+    return {
+      campaign: s.campaign,
+      medium: s.medium,
+      orders: s.orders,
+      total_sales: round(s.total_sales),
+      gross_sales: round(s.gross_sales),
+      net_sales: round(s.gross_sales + s.discounts),
+      discounts: round(s.discounts),
+      taxes: round(s.taxes),
+      shipping: round(s.shipping),
+      returns: round(s.returns),
+      customers: s.customers.size,
+      orders_first_time: s.orders_first_time,
+      orders_returning: s.orders_returning,
+      total_sales_first_time: round(s.total_sales_first_time),
+      total_sales_returning: round(s.total_sales_returning),
+      ad_spend: round(ad_spend),
+      roas: roas == null ? null : Math.round((roas + Number.EPSILON) * 100) / 100,
+    };
+  });
 
   // Sort by total_sales descending
   utmRows.sort((a, b) => b.total_sales - a.total_sales);
+
+  // Compute summary ad_spend (sum of provided per-row spends) and ROAS
+  const summary_ad_spend = utmRows.reduce((acc, r: any) => acc + (r.ad_spend || 0), 0);
+  const summary_roas = summary_ad_spend > 0 ? (total_sales / summary_ad_spend) : null;
 
   return json({
     // Summary totals
@@ -302,6 +330,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       amount_spent_per_customer: round(amount_spent_per_customer),
       number_of_orders_per_customer: round(number_of_orders_per_customer),
       returning_customer_rate: round(returning_customer_rate),
+      ad_spend: round(summary_ad_spend),
+      roas: summary_roas == null ? null : Math.round((summary_roas + Number.EPSILON) * 100) / 100,
     },
     // UTM breakdown
     utmRows,
