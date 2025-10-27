@@ -322,14 +322,8 @@ export default function AnalyticsPage() {
     }
     params.set("format", "xlsx");
     const href = `/app/analytics/export?${params.toString()}`;
-    // Create a temporary form targeting a new tab to ensure first-party cookie context
-    const formEl = document.createElement('form');
-    formEl.method = 'GET';
-    formEl.action = href;
-    formEl.target = '_blank';
-    document.body.appendChild(formEl);
-    formEl.submit();
-    document.body.removeChild(formEl);
+    // Open in same window to preserve session/cookies
+    window.location.href = href;
     // Brief loading indicator
     window.setTimeout(() => setIsExporting(false), 1500);
   };

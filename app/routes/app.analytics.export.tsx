@@ -1,9 +1,26 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 
+// Support both GET and POST
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  return handleExport(request);
+};
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  if (request.method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+  return handleExport(request);
+};
+
+async function handleExport(request: Request) {
+  try {
+    await authenticate.admin(request);
+  } catch (error) {
+    // If authentication fails, return a 401 which will trigger re-auth
+    return json({ error: "Unauthorized" }, { status: 401 });
+  }
   
   const url = new URL(request.url);
   const format = url.searchParams.get("format");
