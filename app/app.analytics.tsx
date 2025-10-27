@@ -336,15 +336,42 @@ export default function AnalyticsPage() {
       metric: params.get("metric"),
     });
     
-    // Open in same window to preserve session/cookies
-    console.log("[ANALYTICS] Redirecting to export endpoint...");
-    window.location.href = href;
-    
-    // Brief loading indicator
-    window.setTimeout(() => {
-      console.log("[ANALYTICS] Export timeout - resetting loading state");
-      setIsExporting(false);
-    }, 1500);
+    // Use fetch to download the file while preserving session
+    console.log("[ANALYTICS] Fetching export file...");
+    fetch(href, {
+      method: "GET",
+      credentials: "include", // Include cookies
+    })
+      .then((response) => {
+        console.log("[ANALYTICS] Export response received:", response.status);
+        if (!response.ok) {
+          console.error("[ANALYTICS] Export failed with status:", response.status);
+          throw new Error(`Export failed: ${response.statusText}`);
+        }
+        return response.blob();
+      })
+      .then((blob) => {
+        console.log("[ANALYTICS] Blob received, size:", blob.size);
+        // Create a download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `analytics-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        console.log("[ANALYTICS] Triggering download...");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        console.log("[ANALYTICS] Download complete");
+      })
+      .catch((error) => {
+        console.error("[ANALYTICS] Export error:", error);
+        alert(`Export failed: ${error.message}`);
+      })
+      .finally(() => {
+        console.log("[ANALYTICS] Export process finished");
+        setIsExporting(false);
+      });
   };
 
   // Chart rendering helpers

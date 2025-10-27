@@ -24,6 +24,13 @@ async function handleExport(request: Request) {
     const authResult = await authenticate.admin(request);
     console.log("[EXPORT] Authentication successful");
   } catch (error) {
+    // Shopify auth throws a Response object (redirect) on auth failure
+    if (error instanceof Response) {
+      console.error("[EXPORT] Authentication redirect response:", error.status, error.statusText);
+      console.error("[EXPORT] Redirect location:", error.headers.get("location"));
+      // Re-throw the response to let Remix handle the redirect
+      throw error;
+    }
     console.error("[EXPORT] Authentication failed:", error instanceof Error ? error.message : String(error));
     console.error("[EXPORT] Error details:", error);
     return json({ error: "Unauthorized", details: error instanceof Error ? error.message : String(error) }, { status: 401 });
