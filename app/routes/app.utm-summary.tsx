@@ -34,6 +34,13 @@ export default function UtmSummaryPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any | null>(null);
+  
+  // Products section state
+  const [selectedCampaign, setSelectedCampaign] = useState<string>("");
+  const [selectedMedium, setSelectedMedium] = useState<string>("");
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState<string | null>(null);
+  const [productsData, setProductsData] = useState<any | null>(null);
 
   const qs = useMemo(() => `since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`, [since, until]);
 
@@ -68,6 +75,30 @@ export default function UtmSummaryPage() {
   const onApply = () => {
     setSearchParams({ since, until });
     run();
+  };
+
+  const fetchProducts = async (campaign: string, medium: string) => {
+    if (!campaign || !medium) {
+      setProductsError("Please select a campaign and medium");
+      return;
+    }
+    setProductsLoading(true);
+    setProductsError(null);
+    try {
+      const qs = `campaign=${encodeURIComponent(campaign)}&medium=${encodeURIComponent(medium)}&since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`;
+      const res = await fetch(`/app/api/utm-products?${qs}`, { credentials: "same-origin" });
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        throw new Error("Unexpected non-JSON response from server");
+      }
+      const j = await res.json();
+      if (!res.ok && j?.error) throw new Error(j.error);
+      setProductsData(j);
+    } catch (e: any) {
+      setProductsError(e?.message || "Failed to fetch products");
+    } finally {
+      setProductsLoading(false);
+    }
   };
 
   return (
@@ -186,6 +217,89 @@ export default function UtmSummaryPage() {
             </Card>
           </Layout.Section>
         )}
+
+        <Layout.Section>
+          <Card>
+            <Box padding="400">
+              <Text as="h3" variant="headingSm" tone="subdued">Products by UTM</Text>
+              <div style={{ marginTop: '16px' }}>
+                <InlineStack gap="300" wrap align="end">
+                  <div style={{ minWidth: '200px' }}>
+                    <Text as="span" variant="bodySm" tone="subdued">Select Campaign</Text>
+                    <select 
+                      value={selectedCampaign}
+                      onChange={(e) => setSelectedCampaign(e.target.value)}
+                      style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
+                    >
+                      <option value="">-- Choose a campaign --</option>
+                      {data?.utmRows?.map((row: any) => (
+                        <option key={`${row.campaign}|${row.medium}`} value={row.campaign}>
+                          {row.campaign}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ minWidth: '200px' }}>
+                    <Text as="span" variant="bodySm" tone="subdued">Select Medium</Text>
+                    <select 
+                      value={selectedMedium}
+                      onChange={(e) => setSelectedMedium(e.target.value)}
+                      style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
+                    >
+                      <option value="">-- Choose a medium --</option>
+                      {data?.utmRows
+                        ?.filter((row: any) => !selectedCampaign || row.campaign === selectedCampaign)
+                        ?.map((row: any) => (
+                          <option key={`${row.campaign}|${row.medium}`} value={row.medium}>
+                            {row.medium}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <Button 
+                    variant="primary" 
+                    loading={productsLoading}
+                    onClick={() => fetchProducts(selectedCampaign, selectedMedium)}
+                  >
+                    Fetch Products
+                  </Button>
+                </InlineStack>
+              </div>
+
+              {productsError && (
+                <Box paddingBlockStart="400">
+                  <Text as="p" tone="critical">{productsError}</Text>
+                </Box>
+              )}
+
+              {productsData && (
+                <Box paddingBlockStart="400">
+                  <Scrollable shadow style={{ maxHeight: 420 }}>
+                    <DataTable
+                      columnContentTypes={[
+                        "text", "text", "text", "text", "text", "numeric", "numeric", "numeric", "numeric"
+                      ]}
+                      headings={[
+                        "Product Title",
+                        "Variant Title",
+                        "SKU",
+                        "Handle",
+                        "Orders",
+                        "Quantity Sold",
+                        "Unit Price",
+                        "Total Revenue",
+                        "Avg Revenue/Order"
+                      ]}
+                      rows={buildProductRows(productsData)}
+                      increasedTableDensity
+                      stickyHeader
+                    />
+                  </Scrollable>
+                </Box>
+              )}
+            </Box>
+          </Card>
+        </Layout.Section>
       </Layout>
     </Page>
   );
@@ -278,4 +392,27 @@ function fmtMoney(n: number | null | undefined, currency?: string | null) {
 function fmtPct(n: number | null | undefined) {
   if (n == null) return "-";
   return `${(Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2)}%`;
+}
+
+function buildProductRows(d: any): Array<Array<string | number>> {
+  const rows: Array<Array<string | number>> = [];
+  const curr = d.currency || "USD";
+
+  for (const product of d.productRows || []) {
+    const avgRevenuePerOrder = product.orderCount ? product.totalRevenue / product.orderCount : 0;
+    
+    rows.push([
+      product.productTitle,
+      product.variantTitle,
+      product.sku,
+      product.productHandle,
+      fmtNum(product.orderCount),
+      fmtNum(product.quantity),
+      fmtMoney(product.unitPrice, curr),
+      fmtMoney(product.totalRevenue, curr),
+      fmtMoney(avgRevenuePerOrder, curr),
+    ]);
+  }
+
+  return rows;
 }
