@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "./shopify.server";
+import cache, { CACHE_TTL, generateCacheKey } from "./cache.server";
 
 // GET /app/api/utm-summary?since=YYYY-MM-DD&until=YYYY-MM-DD
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -11,12 +12,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return json({ error: "Missing 'since' or 'until' query param (YYYY-MM-DD)" }, { status: 400 });
   }
 
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  
+  // Generate cache key
+  const spendParam = url.searchParams.get("spend");
+  const cacheKey = generateCacheKey("utm-summary", {
+    shop: session.shop,
+    since,
+    until,
+    spend: spendParam || "",
+  });
+  
+  // Check cache
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return json(cached);
+  }
 
   // Optional: ad spend mapping for ROAS. Pass as JSON string in `spend` query param
   // Format: { "CampaignA|(not set)": 123.45, "MyCampaign|facebook": 456.78 }
   // Keys are "campaign|medium" matching the rows below
-  const spendParam = url.searchParams.get("spend");
   const spendMap = new Map<string, number>();
   if (spendParam) {
     try {
@@ -309,7 +324,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const summary_ad_spend = utmRows.reduce((acc, r: any) => acc + (r.ad_spend || 0), 0);
   const summary_roas = summary_ad_spend > 0 ? ((gross_sales + discounts) / summary_ad_spend) : null;
 
-  return json({
+  const responseData = {
     // Summary totals
     summary: {
       total_sales: round(total_sales),
@@ -337,5 +352,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // UTM breakdown
     utmRows,
     currency: currency || null,
-  });
+  };
+  
+  // Cache for 10 minutes
+  cache.set(cacheKey, responseData, CACHE_TTL.UTM_SUMMARY);
+  
+  return json(responseData);
 };

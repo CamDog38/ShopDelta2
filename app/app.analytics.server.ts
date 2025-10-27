@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { authenticate } from "./shopify.server";
 import { computeYoYAnnualAggregate, computeYoYAnnualProduct, computeYoYMonthlyAggregate, computeYoYMonthlyProduct } from "./analytics.yoy.server";
 import { computeMoMDefaultFromYoYAggregate, computeMoMDefaultFromYoYProduct } from "./analytics.mom.server";
+import cache, { CACHE_TTL, generateCacheKey } from "./cache.server";
 
 // Keep server-only helpers here to avoid importing client module
 // Fetch recent orders and compute top products by quantity sold
@@ -35,6 +36,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // Parse filters
   const url = new URL(request.url);
+  
+  // Generate cache key from query params
+  const cacheParams = {
+    shop: session.shop,
+    start: url.searchParams.get("start") || "",
+    end: url.searchParams.get("end") || "",
+    granularity: url.searchParams.get("granularity") || "day",
+    preset: url.searchParams.get("preset") || "last30",
+    view: url.searchParams.get("view") || "chart",
+    compare: url.searchParams.get("compare") || "none",
+    compareScope: url.searchParams.get("compareScope") || "aggregate",
+    metric: url.searchParams.get("metric") || "qty",
+    chartScope: url.searchParams.get("chartScope") || "aggregate",
+  };
+  const cacheKey = generateCacheKey("analytics", cacheParams);
+  
+  // Check cache first
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    dlog("Cache HIT for", cacheKey);
+    return json(cached);
+  }
+  dlog("Cache MISS for", cacheKey);
   const startParam = url.searchParams.get("start");
   const endParam = url.searchParams.get("end");
   const granParam = (url.searchParams.get("granularity") as Granularity) || "day";
@@ -783,7 +807,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
     }
 
-    return json({
+    const responseData = {
       topProducts: Array.from(counts.entries())
         .map(([id, { title, quantity }]) => ({ id, title, quantity }))
         .sort((a, b) => b.quantity - a.quantity)
@@ -831,7 +855,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shop: session.shop,
       yoyPrevMonths,
       yoyCurrMonths,
-    });
+    };
+    
+    // Cache the response for 10 minutes
+    cache.set(cacheKey, responseData, CACHE_TTL.ANALYTICS);
+    dlog("Cached analytics data for", cacheKey);
+    
+    return json(responseData);
   } catch (err: any) {
     dlog("Loader error:", err?.message, (err as any)?.response?.errors || err);
     return json(

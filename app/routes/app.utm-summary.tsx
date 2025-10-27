@@ -5,6 +5,7 @@ import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { Page, Card, Layout, Text, InlineStack, Box, Button, DataTable, Scrollable, BlockStack } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import analyticsStylesUrl from "../styles/analytics.css?url";
+import { UTMLoadingSkeleton } from "../components/LoadingSkeleton";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: analyticsStylesUrl },
@@ -172,6 +173,15 @@ export default function UtmSummaryPage() {
       setProductsLoading(false);
     }
   };
+
+  // Show loading skeleton on initial load
+  if (loading && !data) {
+    return (
+      <Page title="Campaign Analytics">
+        <UTMLoadingSkeleton />
+      </Page>
+    );
+  }
 
   return (
     <Page title="Campaign Analytics">

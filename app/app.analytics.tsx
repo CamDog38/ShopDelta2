@@ -3,6 +3,7 @@ import { useLoaderData, useLocation, useRouteError, useSubmit, useNavigation } f
 import { useState } from "react";
 import { Page, DataTable, BlockStack, Text, Link, Button, InlineStack, Spinner } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
+import { AnalyticsLoadingSkeleton } from "./components/LoadingSkeleton";
 import { YoYControls } from "./components/YoYControls";
 import analyticsStylesUrl from "./styles/analytics.css?url";
 import type { loader as analyticsLoader } from "./app.analytics.server";
@@ -54,6 +55,17 @@ export default function AnalyticsPage() {
   const [showTrendsHelp, setShowTrendsHelp] = useState(false);
   const [showBreakdownHelp, setShowBreakdownHelp] = useState(false);
   const [showSummaryHelp, setShowSummaryHelp] = useState(false);
+  
+  // Show loading skeleton on initial load
+  if (isNavLoading && !data) {
+    return (
+      <Page title="Analytics">
+        <TitleBar title="Analytics" />
+        <AnalyticsLoadingSkeleton />
+      </Page>
+    );
+  }
+  
   // Handle known error cases with helpful actions
   const errType = (data as any).error as string | undefined;
   if (errType === "ACCESS_DENIED") {
