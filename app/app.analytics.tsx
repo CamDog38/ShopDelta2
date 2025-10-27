@@ -560,27 +560,29 @@ export default function AnalyticsPage() {
             </div>
             <div style={{ marginLeft: 'auto' }}>
               <div 
-                onClick={(e) => { e.preventDefault(); }}
-                title="Coming soon"
+                onClick={exportWorkbook}
+                title="Export analytics data to Excel"
                 style={{
                   padding: '12px 20px',
                   borderRadius: '8px',
-                  background: 'linear-gradient(135deg, #c7c7c7 0%, #e0e0e0 100%)',
-                  color: '#6b7280',
-                  cursor: 'not-allowed',
+                  background: isExporting
+                    ? 'linear-gradient(135deg, #c7c7c7 0%, #e0e0e0 100%)'
+                    : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  cursor: isExporting ? 'not-allowed' : 'pointer',
                   fontWeight: '600',
                   fontSize: '14px',
                   border: 'none',
                   transition: 'all 0.3s ease',
                   backdropFilter: 'blur(10px)',
-                  opacity: 0.6,
-                  boxShadow: 'none',
+                  opacity: isExporting ? 0.6 : 1,
+                  boxShadow: isExporting ? 'none' : '0 4px 15px rgba(102, 126, 234, 0.3)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px'
                 }}
               >
-                🚧 Export Excel (Coming soon)
+                {isExporting ? '⏳ Exporting...' : '📥 Export Excel'}
               </div>
             </div>
           </InlineStack>

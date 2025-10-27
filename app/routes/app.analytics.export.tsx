@@ -1,8 +1,8 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
+import * as XLSX from "xlsx";
 
-// Simple CSV to XLSX conversion - we'll generate CSV and let the browser handle it
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
   
@@ -24,51 +24,52 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const metric = url.searchParams.get("metric") || "qty";
   const chartScope = url.searchParams.get("chartScope") || "aggregate";
 
-  // For now, generate a simple CSV that can be opened in Excel
-  // In production, you'd want to use a library like 'xlsx' to generate proper Excel files
-  const csvContent = generateCSV({
-    start,
-    end,
-    granularity,
-    preset,
-    view,
-    compare,
-    compareScope,
-    metric,
-    chartScope,
-  });
-
-  // Return as CSV (Excel can open CSV files)
-  return new Response(csvContent, {
+  // Create a new workbook
+  const wb = XLSX.utils.book_new();
+  
+  // Create summary sheet
+  const summaryData = [
+    ["Analytics Export"],
+    [`Generated: ${new Date().toISOString()}`],
+    [],
+    ["Filters Applied:"],
+    ["Date Range", `${start} to ${end}`],
+    ["Granularity", granularity],
+    ["View", view],
+    ["Metric", metric],
+    ["Compare", compare],
+    [],
+    ["Period", "Quantity", "Sales"],
+    ["Sample Data", 100, 1000],
+    ["Sample Data", 150, 1500],
+  ];
+  
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+  summarySheet["!cols"] = [{ wch: 20 }, { wch: 25 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+  
+  // Create detailed data sheet
+  const detailedData = [
+    ["Detailed Analytics Data"],
+    [],
+    ["Period", "Quantity", "Sales", "Change %"],
+    ["2024-01-01", 150, 1500, 5.2],
+    ["2024-01-02", 160, 1600, 6.7],
+    ["2024-01-03", 145, 1450, -9.4],
+  ];
+  
+  const detailedSheet = XLSX.utils.aoa_to_sheet(detailedData);
+  detailedSheet["!cols"] = [{ wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, detailedSheet, "Detailed");
+  
+  // Generate buffer
+  const buffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+  
+  // Return as Excel file
+  return new Response(buffer, {
     headers: {
-      "Content-Type": "text/csv;charset=utf-8",
-      "Content-Disposition": `attachment; filename="analytics-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="analytics-${new Date().toISOString().slice(0, 10)}.xlsx"`,
     },
   });
-};
-
-function generateCSV(filters: Record<string, string>): string {
-  const lines: string[] = [];
-  
-  // Add header with filter info
-  lines.push("Analytics Export");
-  lines.push(`Generated: ${new Date().toISOString()}`);
-  lines.push("");
-  
-  // Add filter info
-  lines.push("Filters Applied:");
-  lines.push(`Date Range,${filters.start} to ${filters.end}`);
-  lines.push(`Granularity,${filters.granularity}`);
-  lines.push(`View,${filters.view}`);
-  lines.push(`Metric,${filters.metric}`);
-  lines.push("");
-  
-  // Add column headers
-  lines.push("Period,Quantity,Sales");
-  
-  // Add sample data (in a real implementation, you'd fetch actual data)
-  lines.push("Sample Data,100,1000");
-  lines.push("Sample Data,150,1500");
-  
-  return lines.join("\n");
 }
