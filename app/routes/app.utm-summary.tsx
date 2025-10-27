@@ -46,6 +46,8 @@ export default function UtmSummaryPage() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [productsData, setProductsData] = useState<any | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [showUTMHelp, setShowUTMHelp] = useState(false);
   // Ad spend state for ROAS (keyed by "campaign|medium")
   const [spendMap, setSpendMap] = useState<Record<string, number>>({});
   const spendObj = useMemo(() => {
@@ -113,6 +115,33 @@ export default function UtmSummaryPage() {
     });
     // Re-run fetch with spend to compute server-side ROAS; UI also computes immediately
     setTimeout(() => run(), 0);
+  };
+
+  // Export UTM breakdown to Excel (includes ROAS if ad spend provided)
+  const exportUtmWorkbook = () => {
+    setIsExporting(true);
+    const params = new URLSearchParams();
+    params.set("since", since);
+    params.set("until", until);
+    if (Object.keys(spendObj).length) params.set("spend", JSON.stringify(spendObj));
+    const href = `/app/utm-summary/export?${params.toString()}`;
+    fetch(href, { method: "GET", credentials: "include" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Export failed: ${response.statusText}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `utm-summary-${since}-to-${until}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      })
+      .catch((err) => alert(err.message || "Export failed"))
+      .finally(() => setIsExporting(false));
   };
 
   const onApply = () => {
@@ -216,7 +245,47 @@ export default function UtmSummaryPage() {
         {/* UTM Breakdown Table with editable Ad Spend */}
         {data && (
           <div style={{ background: 'var(--p-color-bg-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
-            <Text as="h3" variant="headingSm">UTM Campaign Breakdown</Text>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
+                <Text as="h3" variant="headingSm">UTM Campaign Breakdown</Text>
+                <span
+                  onMouseEnter={() => setShowUTMHelp(true)}
+                  onMouseLeave={() => setShowUTMHelp(false)}
+                  style={{
+                    background: '#ff9800', color: '#ffffff', padding: '2px 8px', borderRadius: '999px', fontSize: 12, cursor: 'help', border: '1px solid rgba(0,0,0,0.1)'
+                  }}
+                  aria-describedby="utm-breakdown-help"
+                >ℹ Read me</span>
+                <div
+                  id="utm-breakdown-help"
+                  role="tooltip"
+                  style={{ position: 'absolute', top: '130%', left: 0, zIndex: 10, width: 420, background: 'white', color: 'var(--p-color-text)', border: '1px solid var(--p-color-border)', borderRadius: 8, padding: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', display: showUTMHelp ? 'block' : 'none' }}
+                >
+                  <div style={{ marginBottom: 8 }}>
+                    <Text as="p" variant="bodySm"><b>UTM Campaign Breakdown</b></Text>
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <Text as="p" variant="bodyXs" tone="subdued">
+                      This table summarizes sales and orders by UTM Campaign and Medium for the selected date range.
+                      To calculate ROAS, enter <b>Ad Spend</b> per row. ROAS is computed as <b>Total Sales / Ad Spend</b>.
+                      Press <b>Enter</b> or click away to apply. The Excel export will include Ad Spend and ROAS.
+                    </Text>
+                  </div>
+                </div>
+              </div>
+              <div
+                onClick={isExporting ? undefined : exportUtmWorkbook}
+                title="Export UTM table to Excel"
+                style={{
+                  padding: '10px 16px', borderRadius: 8,
+                  background: isExporting ? 'linear-gradient(135deg, #c7c7c7 0%, #e0e0e0 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white', cursor: isExporting ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 14,
+                  boxShadow: isExporting ? 'none' : '0 4px 15px rgba(102, 126, 234, 0.3)'
+                }}
+              >
+                {isExporting ? '⏳ Exporting...' : '📥 Export Excel'}
+              </div>
+            </div>
             <Box paddingBlockStart="400">
               <div className="analytics-table-sticky" style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -319,8 +388,8 @@ export default function UtmSummaryPage() {
                           <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(utm.total_sales_returning, data.currency)}</td>
                           <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(utm.orders_first_time)}</td>
                           <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(utm.orders_returning)}</td>
+                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(utm.orders_first_time)}</td>
                           <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(Math.max(0, utm.customers - utm.orders_first_time))}</td>
-                          <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(utm.customers)}</td>
                           <td style={{ textAlign: 'right', padding: '12px' }}>{fmtMoney(amtPerCust, data.currency)}</td>
                           <td style={{ textAlign: 'right', padding: '12px' }}>{fmtNum(ordersPerCust)}</td>
                           <td style={{ textAlign: 'right', padding: '12px' }}>{fmtPct(returningRate)}</td>
