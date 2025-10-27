@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction, LinksFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
-import { Page, Card, Layout, Text, InlineStack, Box, Button, TextField, DataTable, Scrollable } from "@shopify/polaris";
+import { Page, Card, Layout, Text, InlineStack, Box, Button, DataTable, Scrollable, BlockStack } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
+import analyticsStylesUrl from "../styles/analytics.css?url";
+
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: analyticsStylesUrl },
+];
 
 export const meta: MetaFunction = () => [{ title: "Campaign Analytics" }];
 
@@ -103,81 +108,92 @@ export default function UtmSummaryPage() {
 
   return (
     <Page title="Campaign Analytics">
-      <Layout>
-        <Layout.Section>
-          <div style={{ background: 'var(--p-color-bg-surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
-            <Text as="h3" variant="headingSm" tone="subdued">Date Range & Filters</Text>
-            <div style={{ marginTop: '16px' }}>
-              <InlineStack gap="300" wrap align="end">
-                <div style={{ minWidth: '140px' }}>
-                  <Text as="span" variant="bodySm" tone="subdued">Time Period</Text>
-                  <select 
-                    defaultValue={"last30"}
-                    style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
-                    onChange={(e) => {
-                      const preset = e.target.value;
-                      const now = new Date();
-                      const utcNow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-                      let start: Date, end: Date;
-                      switch (preset) {
-                        case 'last7':
-                          end = utcNow; start = new Date(utcNow); start.setUTCDate(start.getUTCDate() - 6); break;
-                        case 'last30':
-                          end = utcNow; start = new Date(utcNow); start.setUTCDate(start.getUTCDate() - 29); break;
-                        case 'thisMonth':
-                          start = new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), 1)); end = utcNow; break;
-                        case 'lastMonth': {
-                          const firstThis = new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), 1));
-                          start = new Date(Date.UTC(firstThis.getUTCFullYear(), firstThis.getUTCMonth() - 1, 1));
-                          end = new Date(Date.UTC(firstThis.getUTCFullYear(), firstThis.getUTCMonth(), 0));
-                          break;
-                        }
-                        case 'ytd':
-                          start = new Date(Date.UTC(utcNow.getUTCFullYear(), 0, 1)); end = utcNow; break;
-                        default:
-                          return; // custom
+      <BlockStack gap="400">
+        {/* Filters Card - NOT sticky */}
+        <div style={{ background: 'var(--p-color-bg-surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
+          <Text as="h3" variant="headingSm" tone="subdued">Date Range & Filters</Text>
+          <div style={{ marginTop: '16px' }}>
+            <InlineStack gap="300" wrap align="end">
+              <div style={{ minWidth: '140px' }}>
+                <Text as="span" variant="bodySm" tone="subdued">Time Period</Text>
+                <select 
+                  defaultValue={"last30"}
+                  style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
+                  onChange={(e) => {
+                    const preset = e.target.value;
+                    const now = new Date();
+                    const utcNow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+                    let start: Date, end: Date;
+                    switch (preset) {
+                      case 'last7':
+                        end = utcNow; start = new Date(utcNow); start.setUTCDate(start.getUTCDate() - 6); break;
+                      case 'last30':
+                        end = utcNow; start = new Date(utcNow); start.setUTCDate(start.getUTCDate() - 29); break;
+                      case 'thisMonth':
+                        start = new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), 1)); end = utcNow; break;
+                      case 'lastMonth': {
+                        const firstThis = new Date(Date.UTC(utcNow.getUTCFullYear(), utcNow.getUTCMonth(), 1));
+                        start = new Date(Date.UTC(firstThis.getUTCFullYear(), firstThis.getUTCMonth() - 1, 1));
+                        end = new Date(Date.UTC(firstThis.getUTCFullYear(), firstThis.getUTCMonth(), 0));
+                        break;
                       }
-                      setSince(start.toISOString().slice(0, 10));
-                      setUntil(end.toISOString().slice(0, 10));
-                    }}
-                  >
-                    <option value="last7">Last 7 days</option>
-                    <option value="last30">Last 30 days</option>
-                    <option value="thisMonth">This month</option>
-                    <option value="lastMonth">Last month</option>
-                    <option value="ytd">Year to date</option>
-                    <option value="custom">Custom range</option>
-                  </select>
-                </div>
-                <div style={{ minWidth: '120px' }}>
-                  <Text as="span" variant="bodySm" tone="subdued">Start Date</Text>
-                  <input type="date" value={since} onChange={(e) => setSince(e.target.value)} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
-                </div>
-                <div style={{ minWidth: '120px' }}>
-                  <Text as="span" variant="bodySm" tone="subdued">End Date</Text>
-                  <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
-                </div>
-                <Button variant="primary" loading={loading} onClick={onApply}>Apply Filters</Button>
-              </InlineStack>
-            </div>
+                      case 'ytd':
+                        start = new Date(Date.UTC(utcNow.getUTCFullYear(), 0, 1)); end = utcNow; break;
+                      default:
+                        return; // custom
+                    }
+                    setSince(start.toISOString().slice(0, 10));
+                    setUntil(end.toISOString().slice(0, 10));
+                  }}
+                >
+                  <option value="last7">Last 7 days</option>
+                  <option value="last30">Last 30 days</option>
+                  <option value="thisMonth">This month</option>
+                  <option value="lastMonth">Last month</option>
+                  <option value="ytd">Year to date</option>
+                  <option value="custom">Custom range</option>
+                </select>
+              </div>
+              <div style={{ minWidth: '120px' }}>
+                <Text as="span" variant="bodySm" tone="subdued">Start Date</Text>
+                <input type="date" value={since} onChange={(e) => setSince(e.target.value)} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+              </div>
+              <div style={{ minWidth: '120px' }}>
+                <Text as="span" variant="bodySm" tone="subdued">End Date</Text>
+                <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }} />
+              </div>
+              <Button variant="primary" loading={loading} onClick={onApply}>Apply Filters</Button>
+            </InlineStack>
           </div>
-        </Layout.Section>
+        </div>
 
         {error && (
-          <Layout.Section>
-            <Card>
-              <Box padding="400">
-                <Text as="p" tone="critical">{error}</Text>
-              </Box>
-            </Card>
-          </Layout.Section>
+          <Card>
+            <Box padding="400">
+              <Text as="p" tone="critical">{error}</Text>
+            </Box>
+          </Card>
         )}
 
+        {/* Summary Tiles */}
         {data && (
-          <Layout.Section>
-            <Card>
-              <Box padding="400">
-                <Scrollable shadow style={{ maxHeight: 420 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+            <SummaryTile label="Total Sales" value={fmtMoney(data.summary.total_sales, data.currency)} />
+            <SummaryTile label="Orders" value={fmtNum(data.summary.orders)} />
+            <SummaryTile label="Customers" value={fmtNum(data.summary.customers)} />
+            <SummaryTile label="Avg Order Value" value={fmtMoney(data.summary.average_order_value, data.currency)} />
+            <SummaryTile label="New Customers" value={fmtNum(data.summary.new_customers)} />
+            <SummaryTile label="Returning Rate" value={fmtPct(data.summary.returning_customer_rate)} />
+          </div>
+        )}
+
+        {/* UTM Breakdown Table */}
+        {data && (
+          <Card>
+            <Box padding="400">
+              <Text as="h3" variant="headingSm">UTM Campaign Breakdown</Text>
+              <Box paddingBlockStart="400">
+                <Scrollable shadow style={{ maxHeight: 520 }}>
                   <DataTable
                     columnContentTypes={[
                       "text", "text", "numeric", "numeric", "numeric", "numeric", 
@@ -186,27 +202,27 @@ export default function UtmSummaryPage() {
                       "numeric", "numeric", "numeric"
                     ]}
                     headings={[
-                      "Order UTM campaign",
-                      "Order UTM medium",
-                      "Total sales",
+                      "Campaign",
+                      "Medium",
+                      "Total Sales",
                       "Orders",
-                      "Average order value",
-                      "Net sales",
-                      "Gross sales",
+                      "AOV",
+                      "Net Sales",
+                      "Gross Sales",
                       "Discounts",
                       "Returns",
                       "Taxes",
                       "Shipping",
-                      "Total returns",
-                      "Sales (first-time)",
-                      "Sales (returning)",
-                      "Orders (first-time)",
-                      "Orders (returning)",
-                      "New customers",
-                      "Returning customers",
-                      "Amount spent / customer",
-                      "# orders / customer",
-                      "Returning customer rate"
+                      "Total Returns",
+                      "Sales (First-Time)",
+                      "Sales (Returning)",
+                      "Orders (First-Time)",
+                      "Orders (Returning)",
+                      "New Customers",
+                      "Returning Customers",
+                      "Spent / Customer",
+                      "Orders / Customer",
+                      "Returning Rate"
                     ]}
                     rows={buildUTMRows(data)}
                     increasedTableDensity
@@ -214,93 +230,92 @@ export default function UtmSummaryPage() {
                   />
                 </Scrollable>
               </Box>
-            </Card>
-          </Layout.Section>
-        )}
-
-        <Layout.Section>
-          <Card>
-            <Box padding="400">
-              <Text as="h3" variant="headingSm" tone="subdued">Products by UTM</Text>
-              <div style={{ marginTop: '16px' }}>
-                <InlineStack gap="300" wrap align="end">
-                  <div style={{ minWidth: '200px' }}>
-                    <Text as="span" variant="bodySm" tone="subdued">Select Campaign</Text>
-                    <select 
-                      value={selectedCampaign}
-                      onChange={(e) => setSelectedCampaign(e.target.value)}
-                      style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
-                    >
-                      <option value="">-- Choose a campaign --</option>
-                      {data?.utmRows?.map((row: any) => (
-                        <option key={`${row.campaign}|${row.medium}`} value={row.campaign}>
-                          {row.campaign}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={{ minWidth: '200px' }}>
-                    <Text as="span" variant="bodySm" tone="subdued">Select Medium</Text>
-                    <select 
-                      value={selectedMedium}
-                      onChange={(e) => setSelectedMedium(e.target.value)}
-                      style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
-                    >
-                      <option value="">-- Choose a medium --</option>
-                      {data?.utmRows
-                        ?.filter((row: any) => !selectedCampaign || row.campaign === selectedCampaign)
-                        ?.map((row: any) => (
-                          <option key={`${row.campaign}|${row.medium}`} value={row.medium}>
-                            {row.medium}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <Button 
-                    variant="primary" 
-                    loading={productsLoading}
-                    onClick={() => fetchProducts(selectedCampaign, selectedMedium)}
-                  >
-                    Fetch Products
-                  </Button>
-                </InlineStack>
-              </div>
-
-              {productsError && (
-                <Box paddingBlockStart="400">
-                  <Text as="p" tone="critical">{productsError}</Text>
-                </Box>
-              )}
-
-              {productsData && (
-                <Box paddingBlockStart="400">
-                  <Scrollable shadow style={{ maxHeight: 420 }}>
-                    <DataTable
-                      columnContentTypes={[
-                        "text", "text", "text", "text", "text", "numeric", "numeric", "numeric", "numeric"
-                      ]}
-                      headings={[
-                        "Product Title",
-                        "Variant Title",
-                        "SKU",
-                        "Handle",
-                        "Orders",
-                        "Quantity Sold",
-                        "Unit Price",
-                        "Total Revenue",
-                        "Avg Revenue/Order"
-                      ]}
-                      rows={buildProductRows(productsData)}
-                      increasedTableDensity
-                      stickyHeader
-                    />
-                  </Scrollable>
-                </Box>
-              )}
             </Box>
           </Card>
-        </Layout.Section>
-      </Layout>
+        )}
+
+        {/* Products by UTM Section */}
+        <Card>
+          <Box padding="400">
+            <Text as="h3" variant="headingSm">Products by UTM</Text>
+            <div style={{ marginTop: '16px' }}>
+              <InlineStack gap="300" wrap align="end">
+                <div style={{ minWidth: '200px' }}>
+                  <Text as="span" variant="bodySm" tone="subdued">Select Campaign</Text>
+                  <select 
+                    value={selectedCampaign}
+                    onChange={(e) => setSelectedCampaign(e.target.value)}
+                    style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
+                  >
+                    <option value="">-- Choose a campaign --</option>
+                    {data?.utmRows?.map((row: any) => (
+                      <option key={`${row.campaign}|${row.medium}`} value={row.campaign}>
+                        {row.campaign}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ minWidth: '200px' }}>
+                  <Text as="span" variant="bodySm" tone="subdued">Select Medium</Text>
+                  <select 
+                    value={selectedMedium}
+                    onChange={(e) => setSelectedMedium(e.target.value)}
+                    style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
+                  >
+                    <option value="">-- Choose a medium --</option>
+                    {data?.utmRows
+                      ?.filter((row: any) => !selectedCampaign || row.campaign === selectedCampaign)
+                      ?.map((row: any) => (
+                        <option key={`${row.campaign}|${row.medium}`} value={row.medium}>
+                          {row.medium}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <Button 
+                  variant="primary" 
+                  loading={productsLoading}
+                  onClick={() => fetchProducts(selectedCampaign, selectedMedium)}
+                >
+                  Fetch Products
+                </Button>
+              </InlineStack>
+            </div>
+
+            {productsError && (
+              <Box paddingBlockStart="400">
+                <Text as="p" tone="critical">{productsError}</Text>
+              </Box>
+            )}
+
+            {productsData && (
+              <Box paddingBlockStart="400">
+                <Scrollable shadow style={{ maxHeight: 520 }}>
+                  <DataTable
+                    columnContentTypes={[
+                      "text", "text", "text", "text", "numeric", "numeric", "numeric", "numeric", "numeric"
+                    ]}
+                    headings={[
+                      "Product Title",
+                      "Variant Title",
+                      "SKU",
+                      "Handle",
+                      "Orders",
+                      "Quantity Sold",
+                      "Unit Price",
+                      "Total Revenue",
+                      "Avg Revenue/Order"
+                    ]}
+                    rows={buildProductRows(productsData)}
+                    increasedTableDensity
+                    stickyHeader
+                  />
+                </Scrollable>
+              </Box>
+            )}
+          </Box>
+        </Card>
+      </BlockStack>
     </Page>
   );
 }
@@ -415,4 +430,20 @@ function buildProductRows(d: any): Array<Array<string | number>> {
   }
 
   return rows;
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      borderRadius: '12px',
+      padding: '20px',
+      boxShadow: '0 4px 20px rgba(102, 126, 234, 0.15)',
+      color: 'white',
+      textAlign: 'center'
+    }}>
+      <div style={{ opacity: 0.9, marginBottom: '8px', fontSize: '12px' }}>{label}</div>
+      <div style={{ fontWeight: 'bold', fontSize: '20px' }}>{value}</div>
+    </div>
+  );
 }

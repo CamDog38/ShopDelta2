@@ -123,6 +123,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     unitPrice: number;
     totalRevenue: number;
     orderCount: number;
+    orders: Set<string>; // Track unique orders
   };
   const productMap = new Map<string, ProductStats>();
 
@@ -188,13 +189,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             unitPrice,
             totalRevenue: 0,
             orderCount: 0,
+            orders: new Set(),
           });
         }
 
         const stats = productMap.get(key)!;
         stats.quantity += quantity;
         stats.totalRevenue += totalRevenue;
-        stats.orderCount += 1;
+        stats.orders.add(o.id); // Track unique orders
       }
     }
   }
@@ -213,7 +215,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       quantity: p.quantity,
       unitPrice: round(p.unitPrice),
       totalRevenue: round(p.totalRevenue),
-      orderCount: p.orderCount,
+      orderCount: p.orders.size, // Use unique order count
     }))
     .sort((a, b) => b.totalRevenue - a.totalRevenue);
 
