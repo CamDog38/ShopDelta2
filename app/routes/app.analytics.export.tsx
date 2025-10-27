@@ -1,7 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
-import * as XLSX from "xlsx";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -23,6 +22,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const compareScope = url.searchParams.get("compareScope") || "aggregate";
   const metric = url.searchParams.get("metric") || "qty";
   const chartScope = url.searchParams.get("chartScope") || "aggregate";
+
+  // Dynamically import xlsx to avoid Vite bundling issues
+  const XLSX = await import("xlsx");
 
   // Create a new workbook
   const wb = XLSX.utils.book_new();
