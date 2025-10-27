@@ -187,134 +187,128 @@ export default function UtmSummaryPage() {
           </div>
         )}
 
-        {/* UTM Breakdown Table */}
-        {data && (
-          <Card>
-            <Box padding="400">
-              <Text as="h3" variant="headingSm">UTM Campaign Breakdown</Text>
-              <Box paddingBlockStart="400">
-                <Scrollable shadow style={{ maxHeight: 520 }}>
-                  <DataTable
-                    columnContentTypes={[
-                      "text", "text", "numeric", "numeric", "numeric", "numeric", 
-                      "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
-                      "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
-                      "numeric", "numeric", "numeric"
-                    ]}
-                    headings={[
-                      "Campaign",
-                      "Medium",
-                      "Total Sales",
-                      "Orders",
-                      "AOV",
-                      "Net Sales",
-                      "Gross Sales",
-                      "Discounts",
-                      "Returns",
-                      "Taxes",
-                      "Shipping",
-                      "Total Returns",
-                      "Sales (First-Time)",
-                      "Sales (Returning)",
-                      "Orders (First-Time)",
-                      "Orders (Returning)",
-                      "New Customers",
-                      "Returning Customers",
-                      "Spent / Customer",
-                      "Orders / Customer",
-                      "Returning Rate"
-                    ]}
-                    rows={buildUTMRows(data)}
-                    increasedTableDensity
-                    stickyHeader
-                  />
-                </Scrollable>
-              </Box>
-            </Box>
-          </Card>
-        )}
-
         {/* Products by UTM Section */}
-        <Card>
-          <Box padding="400">
-            <Text as="h3" variant="headingSm">Products by UTM</Text>
-            <div style={{ marginTop: '16px' }}>
-              <InlineStack gap="300" wrap align="end">
-                <div style={{ minWidth: '200px' }}>
-                  <Text as="span" variant="bodySm" tone="subdued">Select Campaign</Text>
-                  <select 
-                    value={selectedCampaign}
-                    onChange={(e) => setSelectedCampaign(e.target.value)}
-                    style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
-                  >
-                    <option value="">-- Choose a campaign --</option>
-                    {data?.utmRows?.map((row: any) => (
-                      <option key={`${row.campaign}|${row.medium}`} value={row.campaign}>
-                        {row.campaign}
+        <div style={{ background: 'var(--p-color-bg-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
+          <Text as="h3" variant="headingSm">Products by UTM</Text>
+          <div style={{ marginTop: '16px' }}>
+            <InlineStack gap="300" wrap align="end">
+              <div style={{ minWidth: '200px' }}>
+                <Text as="span" variant="bodySm" tone="subdued">Select Campaign</Text>
+                <select 
+                  value={selectedCampaign}
+                  onChange={(e) => setSelectedCampaign(e.target.value)}
+                  style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
+                >
+                  <option value="">-- Choose a campaign --</option>
+                  {data?.utmRows?.map((row: any) => (
+                    <option key={`${row.campaign}|${row.medium}`} value={row.campaign}>
+                      {row.campaign}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ minWidth: '200px' }}>
+                <Text as="span" variant="bodySm" tone="subdued">Select Medium</Text>
+                <select 
+                  value={selectedMedium}
+                  onChange={(e) => setSelectedMedium(e.target.value)}
+                  style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
+                >
+                  <option value="">-- Choose a medium --</option>
+                  {data?.utmRows
+                    ?.filter((row: any) => !selectedCampaign || row.campaign === selectedCampaign)
+                    ?.map((row: any) => (
+                      <option key={`${row.campaign}|${row.medium}`} value={row.medium}>
+                        {row.medium}
                       </option>
                     ))}
-                  </select>
-                </div>
-                <div style={{ minWidth: '200px' }}>
-                  <Text as="span" variant="bodySm" tone="subdued">Select Medium</Text>
-                  <select 
-                    value={selectedMedium}
-                    onChange={(e) => setSelectedMedium(e.target.value)}
-                    style={{ width: '100%', marginTop: '4px', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: '6px' }}
-                  >
-                    <option value="">-- Choose a medium --</option>
-                    {data?.utmRows
-                      ?.filter((row: any) => !selectedCampaign || row.campaign === selectedCampaign)
-                      ?.map((row: any) => (
-                        <option key={`${row.campaign}|${row.medium}`} value={row.medium}>
-                          {row.medium}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <Button 
-                  variant="primary" 
-                  loading={productsLoading}
-                  onClick={() => fetchProducts(selectedCampaign, selectedMedium)}
-                >
-                  Fetch Products
-                </Button>
-              </InlineStack>
-            </div>
+                </select>
+              </div>
+              <Button 
+                variant="primary" 
+                loading={productsLoading}
+                onClick={() => fetchProducts(selectedCampaign, selectedMedium)}
+              >
+                Fetch Products
+              </Button>
+            </InlineStack>
+          </div>
 
-            {productsError && (
-              <Box paddingBlockStart="400">
-                <Text as="p" tone="critical">{productsError}</Text>
-              </Box>
-            )}
+          {productsError && (
+            <Box paddingBlockStart="400">
+              <Text as="p" tone="critical">{productsError}</Text>
+            </Box>
+          )}
 
-            {productsData && (
-              <Box paddingBlockStart="400">
-                <Scrollable shadow style={{ maxHeight: 520 }}>
-                  <DataTable
-                    columnContentTypes={[
-                      "text", "text", "text", "text", "numeric", "numeric", "numeric", "numeric", "numeric"
-                    ]}
-                    headings={[
-                      "Product Title",
-                      "Variant Title",
-                      "SKU",
-                      "Handle",
-                      "Orders",
-                      "Quantity Sold",
-                      "Unit Price",
-                      "Total Revenue",
-                      "Avg Revenue/Order"
-                    ]}
-                    rows={buildProductRows(productsData)}
-                    increasedTableDensity
-                    stickyHeader
-                  />
-                </Scrollable>
-              </Box>
-            )}
-          </Box>
-        </Card>
+          {productsData && (
+            <Box paddingBlockStart="400">
+              <div className="analytics-table-sticky">
+                <DataTable
+                  columnContentTypes={[
+                    "text", "text", "text", "text", "numeric", "numeric", "numeric", "numeric", "numeric"
+                  ]}
+                  headings={[
+                    "Product Title",
+                    "Variant Title",
+                    "SKU",
+                    "Handle",
+                    "Orders",
+                    "Quantity Sold",
+                    "Unit Price",
+                    "Total Revenue",
+                    "Avg Revenue/Order"
+                  ]}
+                  rows={buildProductRows(productsData)}
+                  increasedTableDensity
+                />
+              </div>
+            </Box>
+          )}
+        </div>
+
+        {/* UTM Breakdown Table */}
+        {data && (
+          <div style={{ background: 'var(--p-color-bg-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--p-color-border)' }}>
+            <Text as="h3" variant="headingSm">UTM Campaign Breakdown</Text>
+            <Box paddingBlockStart="400">
+              <div className="analytics-table-sticky">
+                <DataTable
+                  columnContentTypes={[
+                    "text", "text", "numeric", "numeric", "numeric", "numeric", 
+                    "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
+                    "numeric", "numeric", "numeric", "numeric", "numeric", "numeric",
+                    "numeric", "numeric", "numeric"
+                  ]}
+                  headings={[
+                    "Campaign",
+                    "Medium",
+                    "Total Sales",
+                    "Orders",
+                    "AOV",
+                    "Net Sales",
+                    "Gross Sales",
+                    "Discounts",
+                    "Returns",
+                    "Taxes",
+                    "Shipping",
+                    "Total Returns",
+                    "Sales (First-Time)",
+                    "Sales (Returning)",
+                    "Orders (First-Time)",
+                    "Orders (Returning)",
+                    "New Customers",
+                    "Returning Customers",
+                    "Spent / Customer",
+                    "Orders / Customer",
+                    "Returning Rate"
+                  ]}
+                  rows={buildUTMRows(data)}
+                  increasedTableDensity
+                />
+              </div>
+            </Box>
+          </div>
+        )}
       </BlockStack>
     </Page>
   );
