@@ -175,6 +175,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const counts = new Map<string, { title: string; quantity: number }>();
     const buckets = new Map<string, { label: string; quantity: number }>();
     const bucketSales = new Map<string, number>();
+    const productSalesActual = new Map<string, number>();
     let totalQty = 0;
     let totalSales = 0;
     let currencyCode: string | null = null;
@@ -242,6 +243,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         if (!currencyCode && curr) currencyCode = curr;
         totalSales += amount;
         bucketSales.set(key, (bucketSales.get(key) || 0) + amount);
+        // Track actual sales per product (line-item sums) to avoid proportional allocations
+        productSalesActual.set(id, (productSalesActual.get(id) || 0) + amount);
         totalQty += qty;
       }
     }
@@ -251,17 +254,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 50);
 
-    const salesByProduct = new Map<string, number>();
-    for (const [bKey] of pivot.entries()) {
-      const row = pivot.get(bKey)!;
-      for (const [pid, q] of row.entries()) {
-        const bucketQty = buckets.get(bKey)!.quantity || 1;
-        const bucketAmt = bucketSales.get(bKey) || 0;
-        const alloc = (q / bucketQty) * bucketAmt;
-        salesByProduct.set(pid, (salesByProduct.get(pid) || 0) + alloc);
-      }
-    }
-    const topProductsBySales = Array.from(salesByProduct.entries())
+    // Prefer actual line-item sales for per-product totals
+    const topProductsBySales = Array.from(productSalesActual.entries())
       .map(([id, sales]) => ({ id, title: productSet.get(id)?.title || id, sales }))
       .sort((a, b) => b.sales - a.sales)
       .slice(0, 50);
@@ -308,8 +302,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     // Build full legend list of all products seen in range
     const legendIds = Array.from(productSet.keys()).sort((a, b) => {
-      const sb = salesByProduct.get(b) || 0;
-      const sa = salesByProduct.get(a) || 0;
+      const sb = productSalesActual.get(b) || 0;
+      const sa = productSalesActual.get(a) || 0;
       if (sb !== sa) return sb - sa;
       const qb = counts.get(b)?.quantity || 0;
       const qa = counts.get(a)?.quantity || 0;
@@ -703,7 +697,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               const qPrev = prevCounts.get(pid)?.quantity || 0;
               const sPrev = prevSalesByProduct.get(pid) || 0;
               const qCurrTotal = counts.get(pid)?.quantity || 0;
-              const sCurrTotal = salesByProduct.get(pid) || 0;
+              const sCurrTotal = productSalesActual.get(pid) || 0;
               rows.push({
                 product: title,
                 productSku: productSet.get(pid)?.sku || "",
@@ -795,6 +789,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         .sort((a, b) => b.quantity - a.quantity)
         .slice(0, 10),
       topProductsBySales,
+      // Full product arrays (unlimited) to match Excel export
+      allProductsQty: Array.from(counts.entries()).map(([id, v]) => ({ id, title: v.title, quantity: v.quantity })).sort((a,b)=> b.quantity - a.quantity),
+      allProductsSales: Array.from(productSalesActual.entries()).map(([id, sales]) => ({ id, title: productSet.get(id)?.title || counts.get(id)?.title || id, sales })).sort((a,b)=> b.sales - a.sales),
       series,
       table,
       // Align headers with the same top-20-by-quantity list used to build table rows
