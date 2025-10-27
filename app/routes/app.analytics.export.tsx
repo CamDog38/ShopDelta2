@@ -147,6 +147,30 @@ async function handleExport(request: Request) {
   // Create a new workbook
   const wb = XLSX.utils.book_new();
   console.log("[EXPORT] Creating workbook with multiple sheets...");
+  // Helper to format monetary columns using header detection
+  function formatMoneyColumns(ws: any) {
+    if (!ws || !ws['!ref']) return;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const headerRow = 3; // 0-index (row 4) holds headers for our sheets
+    const keywords = ['sales', 'revenue', 'price', 'amount'];
+    const moneyCols: number[] = [];
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: headerRow, c: C });
+      const cell = ws[addr];
+      const v = typeof cell?.v === 'string' ? cell.v.toLowerCase() : '';
+      if (v && keywords.some(k => v.includes(k)) && !v.includes('%')) moneyCols.push(C);
+    }
+    if (!moneyCols.length) return;
+    for (let R = headerRow + 1; R <= range.e.r; R++) {
+      for (const C of moneyCols) {
+        const addr = XLSX.utils.encode_cell({ r: R, c: C });
+        const cell = ws[addr];
+        if (cell && typeof cell.v === 'number') {
+          cell.z = "#,##0.00";
+        }
+      }
+    }
+  }
   
   // Sheet 1: Export Info & Filters
   const filterData = [
@@ -199,6 +223,7 @@ async function handleExport(request: Request) {
   
   const trendsSalesSheet = XLSX.utils.aoa_to_sheet(trendsSalesData);
   trendsSalesSheet["!cols"] = [{ wch: 20 }, { wch: 15 }];
+  formatMoneyColumns(trendsSalesSheet);
   XLSX.utils.book_append_sheet(wb, trendsSalesSheet, "Trends - Sales");
   console.log("[EXPORT] Added 'Trends - Sales' sheet with", series.length, "data points");
   
@@ -234,6 +259,7 @@ async function handleExport(request: Request) {
   
   const breakdownSalesSheet = XLSX.utils.aoa_to_sheet(breakdownSalesData);
   breakdownSalesSheet["!cols"] = [{ wch: 8 }, { wch: 35 }, { wch: 15 }];
+  formatMoneyColumns(breakdownSalesSheet);
   XLSX.utils.book_append_sheet(wb, breakdownSalesSheet, "All Products - Sales");
   console.log("[EXPORT] Added 'All Products - Sales' sheet with", allProductsSales.length, "products");
   
@@ -291,6 +317,7 @@ async function handleExport(request: Request) {
   seriesDay.forEach((item: any) => { dayBreakdownData.push([item.label || item.key, item.qty || 0, item.sales || 0]); });
   const dayBreakdownSheet = XLSX.utils.aoa_to_sheet(dayBreakdownData);
   dayBreakdownSheet["!cols"] = [{ wch: 20 }, { wch: 15 }, { wch: 15 }];
+  formatMoneyColumns(dayBreakdownSheet);
   XLSX.utils.book_append_sheet(wb, dayBreakdownSheet, "By Day");
   console.log("[EXPORT] Added 'By Day' sheet");
   
@@ -299,6 +326,7 @@ async function handleExport(request: Request) {
   seriesWeek.forEach((item: any) => { weekBreakdownData.push([item.label, item.qty, item.sales]); });
   const weekBreakdownSheet = XLSX.utils.aoa_to_sheet(weekBreakdownData);
   weekBreakdownSheet["!cols"] = [{ wch: 24 }, { wch: 15 }, { wch: 15 }];
+  formatMoneyColumns(weekBreakdownSheet);
   XLSX.utils.book_append_sheet(wb, weekBreakdownSheet, "By Week");
   console.log("[EXPORT] Added 'By Week' sheet");
 
@@ -307,6 +335,7 @@ async function handleExport(request: Request) {
   seriesMonth.forEach((item: any) => { monthBreakdownData.push([item.label, item.qty, item.sales]); });
   const monthBreakdownSheet = XLSX.utils.aoa_to_sheet(monthBreakdownData);
   monthBreakdownSheet["!cols"] = [{ wch: 18 }, { wch: 15 }, { wch: 15 }];
+  formatMoneyColumns(monthBreakdownSheet);
   XLSX.utils.book_append_sheet(wb, monthBreakdownSheet, "By Month");
   console.log("[EXPORT] Added 'By Month' sheet");
 
@@ -322,6 +351,7 @@ async function handleExport(request: Request) {
   }
   const momSheet = XLSX.utils.aoa_to_sheet(momData);
   momSheet["!cols"] = [{ wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }];
+  formatMoneyColumns(momSheet);
   XLSX.utils.book_append_sheet(wb, momSheet, "Compare - MoM");
   console.log("[EXPORT] Added 'Compare - MoM' sheet");
 
@@ -336,6 +366,7 @@ async function handleExport(request: Request) {
     yoy.table.forEach((r: any) => yoyData.push([r.period, r.qtyCurr, r.qtyPrev, r.qtyDelta, r.qtyDeltaPct, r.salesCurr, r.salesPrev, r.salesDelta, r.salesDeltaPct]));
     const yoySheet = XLSX.utils.aoa_to_sheet(yoyData);
     yoySheet["!cols"] = [{ wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }];
+    formatMoneyColumns(yoySheet);
     XLSX.utils.book_append_sheet(wb, yoySheet, "Compare - Year");
     console.log("[EXPORT] Added 'Compare - Year' sheet");
   } catch (e) {
