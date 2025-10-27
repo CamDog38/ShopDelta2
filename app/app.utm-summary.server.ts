@@ -279,7 +279,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const utmRows = Array.from(utmMap.values()).map(s => {
     const key = `${s.campaign}|${s.medium}`;
     const ad_spend = spendMap.get(key) || 0;
-    const roas = ad_spend > 0 ? s.total_sales / ad_spend : null;
+    const net_for_row = s.gross_sales + s.discounts;
+    const roas = ad_spend > 0 ? net_for_row / ad_spend : null;
     return {
       campaign: s.campaign,
       medium: s.medium,
@@ -306,7 +307,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // Compute summary ad_spend (sum of provided per-row spends) and ROAS
   const summary_ad_spend = utmRows.reduce((acc, r: any) => acc + (r.ad_spend || 0), 0);
-  const summary_roas = summary_ad_spend > 0 ? (total_sales / summary_ad_spend) : null;
+  const summary_roas = summary_ad_spend > 0 ? ((gross_sales + discounts) / summary_ad_spend) : null;
 
   return json({
     // Summary totals

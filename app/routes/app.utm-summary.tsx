@@ -267,7 +267,7 @@ export default function UtmSummaryPage() {
                   <div style={{ marginBottom: 8 }}>
                     <Text as="p" variant="bodyXs" tone="subdued">
                       This table summarizes sales and orders by UTM Campaign and Medium for the selected date range.
-                      To calculate ROAS, enter <b>Ad Spend</b> per row. ROAS is computed as <b>Total Sales / Ad Spend</b>.
+                      To calculate ROAS, enter <b>Ad Spend</b> per row. ROAS is computed as <b>Net Sales / Ad Spend</b>.
                       Press <b>Enter</b> or click away to apply. The Excel export will include Ad Spend and ROAS.
                     </Text>
                   </div>
@@ -329,7 +329,7 @@ export default function UtmSummaryPage() {
                       const roasSummary = (() => {
                         const ad = Object.values(spendObj).reduce((acc: number, v: any) => acc + (Number(v) || 0), 0);
                         if (ad > 0) {
-                          const r = s.total_sales / ad; return `${(Math.round((r + Number.EPSILON) * 100) / 100).toFixed(2)}x`;
+                          const r = (s.net_sales ?? 0) / ad; return `${(Math.round((r + Number.EPSILON) * 100) / 100).toFixed(2)}x`;
                         }
                         return data.summary.roas != null ? `${(Math.round((Number(data.summary.roas) + Number.EPSILON) * 100) / 100).toFixed(2)}x` : '-';
                       })();
@@ -369,7 +369,7 @@ export default function UtmSummaryPage() {
                       const amtPerCust = utm.customers ? utm.total_sales / utm.customers : 0;
                       const ordersPerCust = utm.customers ? utm.orders / utm.customers : 0;
                       const returningRate = (utm.orders_first_time + utm.orders_returning) ? (utm.orders_returning / (utm.orders_first_time + utm.orders_returning)) * 100 : 0;
-                      const roas = adSpend > 0 ? `${(Math.round(((utm.total_sales / adSpend) + Number.EPSILON) * 100) / 100).toFixed(2)}x` : (utm.roas != null ? `${(Math.round((Number(utm.roas) + Number.EPSILON) * 100) / 100).toFixed(2)}x` : '-') ;
+                      const roas = adSpend > 0 ? `${(Math.round((((utm.net_sales ?? 0) / adSpend) + Number.EPSILON) * 100) / 100).toFixed(2)}x` : (utm.roas != null ? `${(Math.round((Number(utm.roas) + Number.EPSILON) * 100) / 100).toFixed(2)}x` : '-') ;
                       return (
                         <tr key={`${utm.campaign}|${utm.medium}|${idx}`} style={{ borderBottom: '1px solid var(--p-color-border)' }}>
                           <td style={{ padding: '12px' }}>{utm.campaign}</td>

@@ -262,7 +262,8 @@ async function handleExport(request: Request) {
     const utmRows = Array.from(utmMap.values()).map(s => {
       const key = `${s.campaign}|${s.medium}`;
       const ad_spend = spendMap.get(key) || 0;
-      const roas = ad_spend > 0 ? s.total_sales / ad_spend : null;
+      const net_for_row = s.gross_sales + s.discounts;
+      const roas = ad_spend > 0 ? net_for_row / ad_spend : null;
       return {
         campaign: s.campaign,
         medium: s.medium,
@@ -287,7 +288,7 @@ async function handleExport(request: Request) {
     utmRows.sort((a, b) => b.total_sales - a.total_sales);
 
     const summary_ad_spend = utmRows.reduce((acc, r: any) => acc + (r.ad_spend || 0), 0);
-    const summary_roas = summary_ad_spend > 0 ? (total_sales / summary_ad_spend) : null;
+    const summary_roas = summary_ad_spend > 0 ? ((gross_sales + discounts) / summary_ad_spend) : null;
 
     // Build workbook
     // Dynamically import xlsx (avoid bundling issues)
@@ -329,6 +330,28 @@ async function handleExport(request: Request) {
 
     const sheetData = header.concat([headings], rows);
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    // Column widths
+    ws["!cols"] = [
+      { wch: 24 }, { wch: 14 }, // Campaign, Medium
+      { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 },
+      { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 10 }
+    ];
+    // Apply number formats: money -> #,##0.00; integers -> #,##0; decimals -> 0.00
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    const headerRow = 4; // header rows = 3, headings on row 4
+    const moneyCols = new Set([3,5,6,7,8,9,10,11,12,13,14,19,22]); // 1-indexed: C,E,F,G,H,I,J,K,L,M,N,S,V
+    const intCols = new Set([4,15,16,17,18]); // D,O,P,Q,R
+    const twoDecCols = new Set([20,23]); // T (Orders / Customer), W (ROAS)
+    for (let R = headerRow + 1; R <= range.e.r + 1; R++) {
+      for (let C = 1; C <= range.e.c + 1; C++) {
+        const addr = XLSX.utils.encode_cell({ r: R - 1, c: C - 1 });
+        const cell = ws[addr];
+        if (!cell || typeof cell.v !== 'number') continue;
+        if (moneyCols.has(C)) cell.z = "#,##0.00";
+        else if (intCols.has(C)) cell.z = "#,##0";
+        else if (twoDecCols.has(C)) cell.z = "0.00";
+      }
+    }
     XLSX.utils.book_append_sheet(wb, ws, "UTM Breakdown");
 
     const bin = XLSX.write(wb, { bookType: "xlsx", type: "array" });
