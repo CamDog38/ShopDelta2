@@ -301,9 +301,12 @@ export default function AnalyticsPage() {
 
   // Build export URL with current filters and open in a new tab
   const exportWorkbook = () => {
+    console.log("[ANALYTICS] Export button clicked");
     setIsExporting(true);
     const form = document.getElementById("filters-form") as HTMLFormElement | null;
     const fd = form ? new FormData(form) : new FormData();
+    console.log("[ANALYTICS] Form data collected");
+    
     // Ensure compare/momA/momB/compareScope persist
     if (!fd.get("view")) fd.set("view", filters?.view || "chart");
     if (!fd.get("compare")) fd.set("compare", filters?.compare || "none");
@@ -316,16 +319,32 @@ export default function AnalyticsPage() {
     if (filters?.yoyYearA) fd.set("yoyYearA", filters.yoyYearA);
     if (filters?.yoyYearB) fd.set("yoyYearB", filters.yoyYearB);
     if (filters?.yoyYtd) fd.set("yoyYtd", filters.yoyYtd);
+    
     const params = new URLSearchParams();
     for (const [k, v] of fd.entries()) {
       if (typeof v === "string" && v !== "") params.set(k, v);
     }
     params.set("format", "xlsx");
     const href = `/app/analytics/export?${params.toString()}`;
+    
+    console.log("[ANALYTICS] Export URL:", href);
+    console.log("[ANALYTICS] Filters being exported:", {
+      start: params.get("start"),
+      end: params.get("end"),
+      granularity: params.get("granularity"),
+      view: params.get("view"),
+      metric: params.get("metric"),
+    });
+    
     // Open in same window to preserve session/cookies
+    console.log("[ANALYTICS] Redirecting to export endpoint...");
     window.location.href = href;
+    
     // Brief loading indicator
-    window.setTimeout(() => setIsExporting(false), 1500);
+    window.setTimeout(() => {
+      console.log("[ANALYTICS] Export timeout - resetting loading state");
+      setIsExporting(false);
+    }, 1500);
   };
 
   // Chart rendering helpers

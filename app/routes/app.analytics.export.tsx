@@ -15,17 +15,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 async function handleExport(request: Request) {
+  console.log("[EXPORT] Starting export request");
+  console.log("[EXPORT] Request method:", request.method);
+  console.log("[EXPORT] Request URL:", request.url);
+  
   try {
-    await authenticate.admin(request);
+    console.log("[EXPORT] Attempting authentication...");
+    const authResult = await authenticate.admin(request);
+    console.log("[EXPORT] Authentication successful");
   } catch (error) {
-    // If authentication fails, return a 401 which will trigger re-auth
-    return json({ error: "Unauthorized" }, { status: 401 });
+    console.error("[EXPORT] Authentication failed:", error instanceof Error ? error.message : String(error));
+    console.error("[EXPORT] Error details:", error);
+    return json({ error: "Unauthorized", details: error instanceof Error ? error.message : String(error) }, { status: 401 });
   }
   
   const url = new URL(request.url);
   const format = url.searchParams.get("format");
   
+  console.log("[EXPORT] Format requested:", format);
+  
   if (format !== "xlsx") {
+    console.warn("[EXPORT] Invalid format requested:", format);
     return json({ error: "Only xlsx format is supported" }, { status: 400 });
   }
 
@@ -40,8 +50,12 @@ async function handleExport(request: Request) {
   const metric = url.searchParams.get("metric") || "qty";
   const chartScope = url.searchParams.get("chartScope") || "aggregate";
 
+  console.log("[EXPORT] Filter parameters:", { start, end, granularity, view, metric });
+
   // Dynamically import xlsx to avoid Vite bundling issues
+  console.log("[EXPORT] Importing xlsx library...");
   const XLSX = await import("xlsx");
+  console.log("[EXPORT] xlsx library imported successfully");
 
   // Create a new workbook
   const wb = XLSX.utils.book_new();
@@ -82,9 +96,12 @@ async function handleExport(request: Request) {
   XLSX.utils.book_append_sheet(wb, detailedSheet, "Detailed");
   
   // Generate buffer
+  console.log("[EXPORT] Generating Excel workbook buffer...");
   const buffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+  console.log("[EXPORT] Buffer generated successfully, size:", buffer.length, "bytes");
   
   // Return as Excel file
+  console.log("[EXPORT] Returning Excel file with proper headers");
   return new Response(buffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
