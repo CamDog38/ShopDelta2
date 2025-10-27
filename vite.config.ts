@@ -66,6 +66,9 @@ export default defineConfig({
   ],
   build: {
     assetsInlineLimit: 0,
+    rollupOptions: {
+      external: ["xlsx"],
+    },
   },
   optimizeDeps: {
     include: ["@shopify/app-bridge-react", "@shopify/polaris"],
