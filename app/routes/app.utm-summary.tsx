@@ -294,25 +294,37 @@ export default function UtmSummaryPage() {
 
           {productsData && (
             <Box paddingBlockStart="400">
-              <div className="analytics-table-sticky">
-                <DataTable
-                  columnContentTypes={[
-                    "text", "text", "text", "text", "numeric", "numeric", "numeric", "numeric", "numeric"
-                  ]}
-                  headings={[
-                    "Product Title",
-                    "Variant Title",
-                    "SKU",
-                    "Handle",
-                    "Orders",
-                    "Quantity Sold",
-                    "Unit Price",
-                    "Total Revenue",
-                    "Avg Revenue/Order"
-                  ]}
-                  rows={buildProductRows(productsData)}
-                  increasedTableDensity
-                />
+              <div className="analytics-table-sticky" style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--p-color-border)' }}>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600', minWidth: '280px', whiteSpace: 'normal' }}>Product Title</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600', minWidth: '150px' }}>Variant Title</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600', minWidth: '100px' }}>SKU</th>
+                      <th style={{ textAlign: 'left', padding: '12px', fontWeight: '600', minWidth: '150px' }}>Handle</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600', minWidth: '80px' }}>Orders</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600', minWidth: '100px' }}>Qty Sold</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600', minWidth: '100px' }}>Unit Price</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600', minWidth: '120px' }}>Total Revenue</th>
+                      <th style={{ textAlign: 'right', padding: '12px', fontWeight: '600', minWidth: '130px' }}>Avg Rev/Order</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {buildProductRows(productsData).map((row, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid var(--p-color-border)' }}>
+                        <td style={{ padding: '12px', whiteSpace: 'normal', wordBreak: 'break-word' }}>{row[0]}</td>
+                        <td style={{ padding: '12px' }}>{row[1]}</td>
+                        <td style={{ padding: '12px' }}>{row[2]}</td>
+                        <td style={{ padding: '12px' }}>{row[3]}</td>
+                        <td style={{ textAlign: 'right', padding: '12px' }}>{row[4]}</td>
+                        <td style={{ textAlign: 'right', padding: '12px' }}>{row[5]}</td>
+                        <td style={{ textAlign: 'right', padding: '12px' }}>{row[6]}</td>
+                        <td style={{ textAlign: 'right', padding: '12px' }}>{row[7]}</td>
+                        <td style={{ textAlign: 'right', padding: '12px' }}>{row[8]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </Box>
           )}
