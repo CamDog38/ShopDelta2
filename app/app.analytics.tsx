@@ -55,6 +55,11 @@ export default function AnalyticsPage() {
   const [showTrendsHelp, setShowTrendsHelp] = useState(false);
   const [showBreakdownHelp, setShowBreakdownHelp] = useState(false);
   const [showSummaryHelp, setShowSummaryHelp] = useState(false);
+  // Product picker state (searchable multi-select for Trends -> product charts)
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  // null means "all visible"; otherwise restrict to these ids
+  const [visibleProducts, setVisibleProducts] = useState<string[] | null>(null);
   
   // Show loading skeleton on initial load
   if (isNavLoading && !data) {
@@ -403,6 +408,13 @@ export default function AnalyticsPage() {
   // Aliases to match JSX references below
   const yScaleM = yScaleMChart;
   const xBand = xBandChart;
+  // Resolve active product IDs to render when in product scope
+  const allProductIds = productLegend.map((p) => p.id);
+  const selectedProductIds = (() => {
+    if (filters?.productFocus && filters.productFocus !== 'all') return [filters.productFocus];
+    if (visibleProducts && visibleProducts.length > 0) return visibleProducts;
+    return allProductIds;
+  })();
 
   // Render the component based on view type
   return (
@@ -971,16 +983,15 @@ export default function AnalyticsPage() {
                       {chartType === "bar" && (
                         (filters?.chartScope === 'product'
                           ? (
-                              // Stacked bars for top 5 products
+                              // Stacked bars for products (filtered by selection)
                               series.map((s, i) => {
                                 const cx = xBand(i);
                                 const barW = Math.max(22, innerW / Math.max(1, series.length) * 0.5);
                                 let yCursor = innerH;
                                 const per = ((data as any).seriesProduct as any[]).find((x) => x.key === s.key)?.per || {};
                                 const allLegend = ((data as any).productLegend as any[]) || [];
-                                const legend = (filters?.productFocus && filters.productFocus !== 'all')
-                                  ? allLegend.filter((lg: any) => lg.id === filters.productFocus)
-                                  : allLegend;
+                                // Respect selection and focus
+                                const legend = allLegend.filter((lg: any) => selectedProductIds.includes(lg.id));
                                 const colors = ["#5c6ac4", "#47c1bf", "#f49342", "#bb86fc", "#9c6ade"]; // 5 colors
                                 return (
                                   <g key={s.key}>
@@ -1033,9 +1044,9 @@ export default function AnalyticsPage() {
                         <>
                           {filters?.chartScope === 'product'
                             ? (
-                                // Multiple product lines (optionally focused)
+                                // Multiple product lines (optionally focused and filtered)
                                 seriesProductLines
-                                  .filter((pl) => !filters?.productFocus || filters.productFocus === 'all' || pl.id === filters.productFocus)
+                                  .filter((pl) => selectedProductIds.includes(pl.id))
                                   .map((pl, idx) => (
                                   <g key={pl.id}>
                                     <polyline
@@ -1081,18 +1092,73 @@ export default function AnalyticsPage() {
                     </g>
                   </svg>
                 </div>
-                {/* Product focus (beneath chart) - dropdown only */}
+                {/* Product picker (beneath chart): searchable multi-select with toggles */}
                 {filters?.chartScope === 'product' && productLegend.length > 0 && (
-                  <div className="analytics-legend">
-                    <label className="inline-label">
-                      <span className="legend-label">Show only</span>
-                      <select defaultValue={filters?.productFocus ?? 'all'} onChange={(e) => applyPatch({ view: 'chart', productFocus: e.currentTarget.value })}>
-                        <option value="all">All products</option>
-                        {productLegend.map((p) => (
-                          <option key={p.id} value={p.id}>{p.title}</option>
-                        ))}
-                      </select>
-                    </label>
+                  <div className="analytics-legend" style={{ marginTop: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <div style={{ fontWeight: 600 }}>Products:</div>
+                      <div
+                        onClick={() => setProductPickerOpen((v) => !v)}
+                        style={{
+                          padding: '8px 12px', border: '1px solid var(--p-color-border)', borderRadius: 6,
+                          cursor: 'pointer', background: 'white'
+                        }}
+                      >
+                        {selectedProductIds.length === allProductIds.length ? 'All products' : `${selectedProductIds.length} selected`}
+                      </div>
+                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                        <div
+                          onClick={() => setVisibleProducts(allProductIds)}
+                          style={{ cursor: 'pointer', color: '#5c6ac4' }}
+                        >Select all</div>
+                        <div
+                          onClick={() => setVisibleProducts([])}
+                          style={{ cursor: 'pointer', color: '#5c6ac4' }}
+                        >Clear</div>
+                      </div>
+                    </div>
+                    {productPickerOpen && (
+                      <div style={{ marginTop: 8, border: '1px solid var(--p-color-border)', borderRadius: 8, padding: 8, background: 'white', maxHeight: 260, overflow: 'auto' }}>
+                        <input
+                          type="text"
+                          placeholder="Search products..."
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.currentTarget.value)}
+                          style={{ width: '100%', padding: '8px', border: '1px solid var(--p-color-border)', borderRadius: 6, marginBottom: 8 }}
+                        />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          {productLegend
+                            .filter((p) => !productSearch || p.title.toLowerCase().includes(productSearch.toLowerCase()))
+                            .map((p) => {
+                              const checked = (visibleProducts ? visibleProducts.includes(p.id) : true) && (!filters?.productFocus || filters.productFocus === 'all' || p.id === filters.productFocus);
+                              const disabled = !!(filters?.productFocus && filters.productFocus !== 'all' && p.id !== filters.productFocus);
+                              return (
+                                <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: disabled ? 0.6 : 1 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    disabled={disabled}
+                                    onChange={(e) => {
+                                      const isChecked = e.currentTarget.checked;
+                                      setVisibleProducts((prev) => {
+                                        const base = Array.isArray(prev) ? [...prev] : [...allProductIds];
+                                        if (isChecked) {
+                                          if (!base.includes(p.id)) base.push(p.id);
+                                        } else {
+                                          const idx = base.indexOf(p.id);
+                                          if (idx >= 0) base.splice(idx, 1);
+                                        }
+                                        return base;
+                                      });
+                                    }}
+                                  />
+                                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</span>
+                                </label>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 </>
