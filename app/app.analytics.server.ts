@@ -127,7 +127,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             id
             name
             processedAt
-            lineItems(first: 100) {
+            lineItems(first: 250) {
               edges {
                 node {
                   quantity
@@ -288,7 +288,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .map(([key, v]) => ({ key, label: v.label, quantity: v.quantity, sales: bucketSales.get(key) || 0 }))
       .sort((a, b) => (a.key > b.key ? 1 : -1));
 
-    // Choose which products to chart based on selected metric
+    // Build full legend list of all products seen in range (for product picker)
+    const allProductIds = Array.from(productSet.keys()).sort((a, b) => {
+      const sb = productSalesActual.get(b) || 0;
+      const sa = productSalesActual.get(a) || 0;
+      if (sb !== sa) return sb - sa;
+      const qb = counts.get(b)?.quantity || 0;
+      const qa = counts.get(a)?.quantity || 0;
+      return qb - qa;
+    });
+
+    // For chart display, use top products but ensure all products have data calculated
     const LEGEND_LIMIT = 12;
     const qtyIds = topProducts.map((p) => p.id);
     const salesIds = topProductsBySales.map((p) => p.id);
@@ -298,12 +308,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       topIds = [productFocus, ...topIds].slice(0, LEGEND_LIMIT);
     }
 
+    // Calculate data for ALL products (not just top 12) so filtering works
     const seriesProduct = series.map((s) => {
       const row = pivot.get(s.key) || new Map<string, number>();
       const bucketQty = buckets.get(s.key)?.quantity || 1;
       const bucketAmt = bucketSales.get(s.key) || 0;
       const per: Record<string, { qty: number; sales: number; title: string }> = {};
-      for (const pid of topIds) {
+      // Calculate for ALL products, not just topIds
+      for (const pid of allProductIds) {
         const q = row.get(pid) || 0;
         const alloc = (q / bucketQty) * bucketAmt;
         per[pid] = { qty: q, sales: alloc, title: productSet.get(pid)?.title || pid };
@@ -311,7 +323,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return { key: s.key, label: s.label, per };
     });
 
-    const seriesProductLines = topIds.map((pid) => ({
+    const seriesProductLines = allProductIds.map((pid) => ({
       id: pid,
       title: productSet.get(pid)?.title || pid,
       points: series.map((s) => {
@@ -324,15 +336,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       })
     }));
 
-    // Build full legend list of all products seen in range
-    const legendIds = Array.from(productSet.keys()).sort((a, b) => {
-      const sb = productSalesActual.get(b) || 0;
-      const sa = productSalesActual.get(a) || 0;
-      if (sb !== sa) return sb - sa;
-      const qb = counts.get(b)?.quantity || 0;
-      const qa = counts.get(a)?.quantity || 0;
-      return qb - qa;
-    });
+    // Use allProductIds as the legend (already sorted by sales/qty)
+    const legendIds = allProductIds;
 
     const top20Ids = topProducts.slice(0, 20).map((p) => p.id);
     const table = series.map((s) => {
