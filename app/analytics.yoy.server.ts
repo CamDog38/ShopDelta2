@@ -465,7 +465,7 @@ export async function computeYoYMonthlyProduct(params: {
     query AnalyticsRecentOrders($first: Int!, $search: String, $after: String) {
       orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true, query: $search) {
         pageInfo { hasNextPage }
-        edges { cursor node { processedAt lineItems(first: 100) { edges { node { quantity discountedTotalSet { shopMoney { amount } } product { id title } title } } } } }
+        edges { cursor node { processedAt lineItems(first: 250) { edges { node { quantity discountedTotalSet { shopMoney { amount } } product { id title } title } } } } }
       }
     }
   `;
@@ -599,7 +599,7 @@ export async function computeYoYMonthlyProduct(params: {
       query AnalyticsRecentOrders($first: Int!, $search: String, $after: String) {
         orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true, query: $search) {
           pageInfo { hasNextPage }
-          edges { cursor node { processedAt lineItems(first: 100) { edges { node { quantity discountedTotalSet { shopMoney { amount } } product { id title } title } } } } }
+          edges { cursor node { processedAt lineItems(first: 250) { edges { node { quantity discountedTotalSet { shopMoney { amount } } product { id title } title } } } } }
         }
       }
     `;
@@ -666,5 +666,5 @@ export async function computeYoYMonthlyProduct(params: {
   }
 
   rows.sort((x, y) => (y.salesDelta as number) - (x.salesDelta as number));
-  return { comparison, table: rows.slice(0, 100), headers, yoyPrevMonths, yoyCurrMonths };
+  return { comparison, table: rows, headers, yoyPrevMonths, yoyCurrMonths };
 }
