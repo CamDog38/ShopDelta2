@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
+import { useState } from "react";
 import { Page, BlockStack, Text, InlineStack, Card } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -70,6 +71,8 @@ export default function VisualisationsPage() {
   const data = useLoaderData<typeof loader>();
   const { yearA, yearB, ytd, annualYoY, annualProducts, seriesMonth } = data as any;
 
+  const [metric, setMetric] = useState<"sales" | "qty">("sales");
+
   const heroTitle = ytd
     ? `Year-to-date ${yearB} vs ${yearA}`
     : `${yearB} vs ${yearA}`;
@@ -90,15 +93,15 @@ export default function VisualisationsPage() {
   const fmtPct = (n: number | null | undefined) =>
     n == null ? "–" : `${n.toFixed(1)}%`;
 
-  const topDrivers = (annualProducts?.table || [])
-    .slice()
-    .sort((a: any, b: any) => (b.salesDelta as number) - (a.salesDelta as number))
-    .slice(0, 5);
-
-  const topDraggers = (annualProducts?.table || [])
-    .slice()
-    .sort((a: any, b: any) => (a.salesDelta as number) - (b.salesDelta as number))
-    .slice(0, 5);
+  const top20Products = (() => {
+    const rows = (annualProducts?.table || []).slice();
+    if (metric === "sales") {
+      rows.sort((a: any, b: any) => (b.salesCurr as number) - (a.salesCurr as number));
+    } else {
+      rows.sort((a: any, b: any) => (b.qtyCurr as number) - (a.qtyCurr as number));
+    }
+    return rows.slice(0, 20);
+  })();
 
   return (
     <Page>
@@ -214,82 +217,100 @@ export default function VisualisationsPage() {
           </BlockStack>
         </Card>
 
-        {/* Story 2 – Product drivers and draggers */}
+        {/* Story 2 – YoY product performance (top 20) */}
         <Card>
           <BlockStack gap="300">
             <div>
               <Text as="h2" variant="headingMd">
-                Product drivers & draggers
+                Top products year over year
               </Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                The products that pushed you forward and those that held you
-                back, ranked by year-over-year change in sales.
+                Your strongest products this year compared to last year. Sort
+                by either sales or quantity to see which products lead the pack.
               </Text>
             </div>
-            <InlineStack gap="400" wrap>
-              <div style={{ flex: 2, minWidth: 280, height: 320 }}>
-                <ResponsiveContainer>
-                  <BarChart
-                    data={[...topDrivers, ...topDraggers]}
-                    layout="vertical"
+            <div>
+              <InlineStack gap="200">
+                <div
+                  onClick={() => setMetric("sales")}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background:
+                      metric === "sales"
+                        ? "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                        : "rgba(0,0,0,0.04)",
+                    color: metric === "sales" ? "white" : "#555",
+                  }}
+                >
+                  💰 By sales
+                </div>
+                <div
+                  onClick={() => setMetric("qty")}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background:
+                      metric === "qty"
+                        ? "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                        : "rgba(0,0,0,0.04)",
+                    color: metric === "qty" ? "white" : "#555",
+                  }}
+                >
+                  📦 By quantity
+                </div>
+              </InlineStack>
+            </div>
+
+            <div style={{ width: "100%", height: 360 }}>
+              <ResponsiveContainer>
+                <BarChart
+                  data={top20Products}
+                  layout="vertical"
+                  margin={{ left: 0, right: 24, top: 16, bottom: 16 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(v) =>
+                      metric === "sales"
+                        ? `ZAR ${fmtMoney(v as number)}`
+                        : `${v}`
+                    }
+                  />
+                  <YAxis type="category" dataKey="product" width={260} />
+                  <Tooltip
+                    formatter={(value: any) =>
+                      metric === "sales"
+                        ? `ZAR ${fmtMoney(value)}`
+                        : `${value} units`
+                    }
+                  />
+                  <Bar
+                    dataKey={metric === "sales" ? "salesCurr" : "qtyCurr"}
+                    radius={6}
+                    fill="#42a5f5"
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis
-                      type="number"
-                      tickFormatter={(v) => `ZAR ${fmtMoney(v as number)}`}
+                    <LabelList
+                      dataKey={metric === "sales" ? "salesCurr" : "qtyCurr"}
+                      position="right"
+                      formatter={(v: any) =>
+                        metric === "sales"
+                          ? `ZAR ${fmtMoney(v)}`
+                          : `${v}`
+                      }
+                      style={{ fontSize: 11, fill: "#444" }}
                     />
-                    <YAxis
-                      type="category"
-                      dataKey="product"
-                      width={200}
-                    />
-                    <Tooltip
-                      formatter={(value: any) => `ZAR ${fmtMoney(value)}`}
-                    />
-                    <ReferenceLine x={0} stroke="#999" />
-                    <Bar
-                      dataKey="salesDelta"
-                      radius={6}
-                      fill="#42a5f5"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div style={{ flex: 1, minWidth: 240 }}>
-                <BlockStack gap="300">
-                  <div>
-                    <Text as="h3" variant="headingSm">
-                      Top drivers
-                    </Text>
-                    {topDrivers.map((p: any) => (
-                      <div key={p.product} style={{ marginTop: 8 }}>
-                        <Text as="p" variant="bodySm">
-                          {p.product}
-                        </Text>
-                        <Text as="p" variant="bodyXs" tone="subdued">
-                          +ZAR {fmtMoney(p.salesDelta)} ({fmtPct(p.salesDeltaPct)})
-                        </Text>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <Text as="h3" variant="headingSm">
-                      Top draggers
-                    </Text>
-                    {topDraggers.map((p: any) => (
-                      <div key={p.product} style={{ marginTop: 8 }}>
-                        <Text as="p" variant="bodySm">
-                          {p.product}
-                        </Text>
-                        <Text as="p" variant="bodyXs" tone="subdued">
-                          ZAR {fmtMoney(p.salesDelta)} ({fmtPct(p.salesDeltaPct)})
-                        </Text>
-                      </div>
-                    ))}
-                  </div>
-                </BlockStack>
-              </div>
-            </InlineStack>
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </BlockStack>
         </Card>
       </BlockStack>
