@@ -622,7 +622,35 @@ export default function AnalyticsPage() {
             >
               🔄 Compare
             </div>
-            <div style={{ marginLeft: 'auto' }}>
+            <div
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (filters?.start) params.set('start', filters.start);
+                if (filters?.end) params.set('end', filters.end);
+                window.open(`/app/visualisations?${params.toString()}`, '_blank');
+              }}
+              style={{
+                padding: '12px 20px',
+                borderRadius: '8px',
+                background: 'linear-gradient(135deg, #ff9800 0%, #ffc107 100%)',
+                color: 'white',
+                cursor: isNavLoading ? 'not-allowed' : 'pointer',
+                fontWeight: '600',
+                fontSize: '14px',
+                border: 'none',
+                transition: 'all 0.3s ease',
+                backdropFilter: 'blur(10px)',
+                opacity: isNavLoading ? 0.7 : 1,
+                boxShadow: '0 4px 15px rgba(255, 193, 7, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginLeft: 'auto'
+              }}
+            >
+              📌 Visualisations
+            </div>
+            <div style={{ marginLeft: '12px' }}>
               <div 
                 onClick={exportWorkbook}
                 title="Export analytics data to Excel"
