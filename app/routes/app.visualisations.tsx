@@ -314,108 +314,70 @@ export default function VisualisationsPage() {
           </BlockStack>
         </Card>
 
-        {/* Story 3 – YoY product rank shifts (slopegraph) */}
+        {/* Story 3 – YoY product comparison (paired bars) */}
         <Card>
           <BlockStack gap="300">
             <div>
               <Text as="h2" variant="headingMd">
-                How product rankings shifted year over year
+                YoY product performance (top 10)
               </Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                Follows the top products by sales in the current year and shows
-                how their rank changed vs last year.
+                Compares this year vs last year for your top products by sales.
               </Text>
             </div>
-            <div>
+            <div style={{ width: "100%", height: 400 }}>
               {(() => {
                 const rows: any[] = annualProducts?.table || [];
-                if (!rows.length) return <Text as="p" variant="bodySm">Not enough data yet.</Text>;
+                if (!rows.length) {
+                  return <Text as="p" variant="bodySm">Not enough data yet.</Text>;
+                }
 
-                // Top 10 by current-year sales
-                const currSorted = rows.slice().sort((a, b) => (b.salesCurr as number) - (a.salesCurr as number));
-                const top = currSorted.slice(0, 10);
-
-                // Build rank maps for prev and curr year
-                const prevSorted = rows.slice().sort((a, b) => (b.salesPrev as number) - (a.salesPrev as number));
-                const prevRank = new Map<string, number>();
-                prevSorted.forEach((r, idx) => prevRank.set(r.product, idx + 1));
-                const currRank = new Map<string, number>();
-                currSorted.forEach((r, idx) => currRank.set(r.product, idx + 1));
-
-                const height = 420;
-                const width = 780;
-                const marginTop = 40;
-                const marginBottom = 40;
-                const maxRank = Math.max(
-                  ...top.map((r) => prevRank.get(r.product) || top.length),
-                  ...top.map((r) => currRank.get(r.product) || top.length)
-                );
-                const band = (height - marginTop - marginBottom) / (maxRank + 1);
-                const xLeft = 120;
-                const xRight = width - 120;
-
-                const yForRank = (rank: number) => marginTop + band * rank;
+                const sorted = rows
+                  .slice()
+                  .sort((a, b) => (b.salesCurr as number) - (a.salesCurr as number))
+                  .slice(0, 10)
+                  .reverse(); // show #10 at top, #1 at bottom for nicer reading
 
                 return (
-                  <svg width="100%" viewBox={`0 0 ${width} ${height}`}
-                    style={{ maxWidth: '100%', height: 'auto' }}>
-                    {/* Year labels */}
-                    <text x={xLeft} y={24} textAnchor="middle" fontSize={12} fill="#666">
-                      {yearA}
-                    </text>
-                    <text x={xRight} y={24} textAnchor="middle" fontSize={12} fill="#666">
-                      {yearB}
-                    </text>
-
-                    {/* Vertical guide lines */}
-                    <line x1={xLeft} y1={marginTop} x2={xLeft} y2={height - marginBottom} stroke="#e0e0e0" />
-                    <line x1={xRight} y1={marginTop} x2={xRight} y2={height - marginBottom} stroke="#e0e0e0" />
-
-                    {top.map((r) => {
-                      const p = r.product as string;
-                      const pr = prevRank.get(p) || maxRank;
-                      const cr = currRank.get(p) || maxRank;
-                      const y1 = yForRank(pr);
-                      const y2 = yForRank(cr);
-                      const improved = cr < pr;
-                      const color = improved ? '#4caf50' : '#ef5350';
-
-                      return (
-                        <g key={p}>
-                          {/* connecting line */}
-                          <line x1={xLeft} y1={y1} x2={xRight} y2={y2} stroke={color} strokeWidth={2} />
-                          {/* left dot + label */}
-                          <circle cx={xLeft} cy={y1} r={4} fill={color} />
-                          <text x={xLeft - 8} y={y1 + 4} textAnchor="end" fontSize={10} fill="#555">
-                            #{pr}
-                          </text>
-                          {/* right dot + label */}
-                          <circle cx={xRight} cy={y2} r={4} fill={color} />
-                          <text x={xRight + 8} y={y2 + 4} textAnchor="start" fontSize={10} fill="#555">
-                            #{cr}
-                          </text>
-                        </g>
-                      );
-                    })}
-
-                    {/* Product names on the right */}
-                    {top.map((r) => {
-                      const p = r.product as string;
-                      const cr = currRank.get(p) || maxRank;
-                      const y2 = yForRank(cr);
-                      return (
-                        <text
-                          key={`label-${p}`}
-                          x={xRight + 40}
-                          y={y2 + 4}
-                          fontSize={11}
-                          fill="#333"
-                        >
-                          {p}
-                        </text>
-                      );
-                    })}
-                  </svg>
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={sorted}
+                      layout="vertical"
+                      margin={{ left: 0, right: 32, top: 16, bottom: 16 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis
+                        type="number"
+                        tickFormatter={(v) => `ZAR ${fmtMoney(v as number)}`}
+                      />
+                      <YAxis type="category" dataKey="product" width={260} />
+                      <Tooltip
+                        formatter={(value: any, key: any) => {
+                          const label = key === "salesPrev" ? `${yearA}` : `${yearB}`;
+                          return [`ZAR ${fmtMoney(value)}`, label];
+                        }}
+                      />
+                      <Bar
+                        dataKey="salesPrev"
+                        name={`${yearA}`}
+                        radius={[0, 0, 0, 0]}
+                        fill="#cfd8dc"
+                      />
+                      <Bar
+                        dataKey="salesCurr"
+                        name={`${yearB}`}
+                        radius={[0, 6, 6, 0]}
+                        fill="#42a5f5"
+                      >
+                        <LabelList
+                          dataKey="salesCurr"
+                          position="right"
+                          formatter={(v: any) => `ZAR ${fmtMoney(v)}`}
+                          style={{ fontSize: 11, fill: "#444" }}
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 );
               })()}
             </div>
