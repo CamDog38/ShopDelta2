@@ -73,6 +73,17 @@ export default function VisualisationsPage() {
 
   const [metric, setMetric] = useState<"sales" | "qty">("sales");
 
+  const today = new Date();
+  const fmtYMD = (d: Date) => d.toISOString().slice(0, 10);
+  const [preset, setPreset] = useState<"thisMonth" | "lastMonth" | "custom">(
+    "thisMonth",
+  );
+  const [since, setSince] = useState<string>(() => {
+    const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    return fmtYMD(start);
+  });
+  const [until, setUntil] = useState<string>(() => fmtYMD(today));
+
   const heroTitle = ytd
     ? `Year-to-date ${yearB} vs ${yearA}`
     : `${yearB} vs ${yearA}`;
@@ -125,9 +136,130 @@ export default function VisualisationsPage() {
             A story-driven view of your year-over-year and month-over-month
             performance.
           </Text>
+          <div style={{ marginTop: 16 }}>
+            <InlineStack gap="300" wrap align="end">
+              <div style={{ minWidth: 160 }}>
+                <Text as="span" variant="bodySm" tone="subdued">
+                  Time period
+                </Text>
+                <select
+                  value={preset}
+                  onChange={(e) => {
+                    const value = e.target.value as "thisMonth" | "lastMonth" | "custom";
+                    setPreset(value);
+                    const now = new Date();
+                    const utcNow = new Date(
+                      Date.UTC(
+                        now.getUTCFullYear(),
+                        now.getUTCMonth(),
+                        now.getUTCDate(),
+                      ),
+                    );
+                    let start = utcNow;
+                    let end = utcNow;
+                    if (value === "thisMonth") {
+                      start = new Date(
+                        Date.UTC(
+                          utcNow.getUTCFullYear(),
+                          utcNow.getUTCMonth(),
+                          1,
+                        ),
+                      );
+                    } else if (value === "lastMonth") {
+                      const firstThis = new Date(
+                        Date.UTC(
+                          utcNow.getUTCFullYear(),
+                          utcNow.getUTCMonth(),
+                          1,
+                        ),
+                      );
+                      start = new Date(
+                        Date.UTC(
+                          firstThis.getUTCFullYear(),
+                          firstThis.getUTCMonth() - 1,
+                          1,
+                        ),
+                      );
+                      end = new Date(
+                        Date.UTC(
+                          firstThis.getUTCFullYear(),
+                          firstThis.getUTCMonth(),
+                          0,
+                        ),
+                      );
+                    }
+                    if (value !== "custom") {
+                      setSince(fmtYMD(start));
+                      setUntil(fmtYMD(end));
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    marginTop: 4,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.4)",
+                    background: "rgba(0,0,0,0.15)",
+                    color: "white",
+                    fontSize: 13,
+                  }}
+                >
+                  <option value="thisMonth">This month</option>
+                  <option value="lastMonth">Last month</option>
+                  <option value="custom">Custom range</option>
+                </select>
+              </div>
+              <div style={{ minWidth: 140 }}>
+                <Text as="span" variant="bodySm" tone="subdued">
+                  Start date
+                </Text>
+                <input
+                  type="date"
+                  value={since}
+                  onChange={(e) => {
+                    setSince(e.target.value);
+                    setPreset("custom");
+                  }}
+                  style={{
+                    width: "100%",
+                    marginTop: 4,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.4)",
+                    background: "rgba(0,0,0,0.1)",
+                    color: "white",
+                    fontSize: 13,
+                  }}
+                />
+              </div>
+              <div style={{ minWidth: 140 }}>
+                <Text as="span" variant="bodySm" tone="subdued">
+                  End date
+                </Text>
+                <input
+                  type="date"
+                  value={until}
+                  onChange={(e) => {
+                    setUntil(e.target.value);
+                    setPreset("custom");
+                  }}
+                  style={{
+                    width: "100%",
+                    marginTop: 4,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.4)",
+                    background: "rgba(0,0,0,0.1)",
+                    color: "white",
+                    fontSize: 13,
+                  }}
+                />
+              </div>
+            </InlineStack>
+          </div>
           <div style={{ marginTop: 20 }}>
             <Text as="p" variant="bodySm">
-              {heroTitle}
+              {heroTitle} · {since} → {until}
             </Text>
           </div>
           <div style={{ marginTop: 20 }}>
@@ -171,51 +303,6 @@ export default function VisualisationsPage() {
             </InlineStack>
           </div>
         </div>
-
-        {/* Story 1 – Annual YoY by month */}
-        <Card>
-          <BlockStack gap="300">
-            <div>
-              <Text as="h2" variant="headingMd">
-                Year vs year by month
-              </Text>
-              <Text as="p" variant="bodySm" tone="subdued">
-                See which months drove your year-over-year change. Bars to the
-                right beat last year; bars to the left fell behind.
-              </Text>
-            </div>
-            <div style={{ width: "100%", height: 320 }}>
-              <ResponsiveContainer>
-                <BarChart data={annualYoY?.table || []} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                  <XAxis
-                    type="number"
-                    tickFormatter={(v) => `ZAR ${fmtMoney(v as number)}`}
-                  />
-                  <YAxis type="category" dataKey="period" width={140} />
-                  <Tooltip
-                    formatter={(value: any) => `ZAR ${fmtMoney(value)}`}
-                    labelStyle={{ fontWeight: 600 }}
-                  />
-                  <ReferenceLine x={0} stroke="#999" />
-                  <Bar
-                    dataKey="salesDelta"
-                    radius={6}
-                    fill="#4caf50"
-                    isAnimationActive
-                  >
-                    <LabelList
-                      dataKey="salesDelta"
-                      position="right"
-                      formatter={(v: any) => `ZAR ${fmtMoney(v)}`}
-                      style={{ fontSize: 11, fill: "#444" }}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </BlockStack>
-        </Card>
 
         {/* Story 2 – Top products for this period */}
         <Card>
@@ -268,12 +355,12 @@ export default function VisualisationsPage() {
               </InlineStack>
             </div>
 
-            <div style={{ width: "100%", height: 360 }}>
+            <div style={{ width: "100%", height: 380 }}>
               <ResponsiveContainer>
                 <BarChart
                   data={top20Products}
                   layout="vertical"
-                  margin={{ left: 0, right: 24, top: 16, bottom: 16 }}
+                  margin={{ left: 0, right: 40, top: 16, bottom: 16 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis
@@ -284,7 +371,12 @@ export default function VisualisationsPage() {
                         : `${v}`
                     }
                   />
-                  <YAxis type="category" dataKey="product" width={260} />
+                  <YAxis
+                    type="category"
+                    dataKey="product"
+                    width={310}
+                    tick={{ fontSize: 11 }}
+                  />
                   <Tooltip
                     formatter={(value: any) =>
                       metric === "sales"
@@ -322,19 +414,61 @@ export default function VisualisationsPage() {
                 YoY product performance (top 10)
               </Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                Compares this year vs last year for your top products by sales.
+                Compares this year vs last year for your top products by sales
+                or quantity.
               </Text>
             </div>
-            <div style={{ width: "100%", height: 400 }}>
+            <div>
+              <InlineStack gap="200">
+                <div
+                  onClick={() => setMetric("sales")}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background:
+                      metric === "sales"
+                        ? "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                        : "rgba(0,0,0,0.04)",
+                    color: metric === "sales" ? "#fff" : "#555",
+                  }}
+                >
+                  💰 By sales
+                </div>
+                <div
+                  onClick={() => setMetric("qty")}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    background:
+                      metric === "qty"
+                        ? "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                        : "rgba(0,0,0,0.04)",
+                    color: metric === "qty" ? "#fff" : "#555",
+                  }}
+                >
+                  📦 By quantity
+                </div>
+              </InlineStack>
+            </div>
+            <div style={{ width: "100%", height: 420 }}>
               {(() => {
                 const rows: any[] = annualProducts?.table || [];
                 if (!rows.length) {
                   return <Text as="p" variant="bodySm">Not enough data yet.</Text>;
                 }
 
+                const valueKeyCurr = metric === "sales" ? "salesCurr" : "qtyCurr";
+                const valueKeyPrev = metric === "sales" ? "salesPrev" : "qtyPrev";
+
                 const sorted = rows
                   .slice()
-                  .sort((a, b) => (b.salesCurr as number) - (a.salesCurr as number))
+                  .sort((a, b) => (b[valueKeyCurr] as number) - (a[valueKeyCurr] as number))
                   .slice(0, 10)
                   .reverse(); // show #10 at top, #1 at bottom for nicer reading
 
@@ -343,36 +477,54 @@ export default function VisualisationsPage() {
                     <BarChart
                       data={sorted}
                       layout="vertical"
-                      margin={{ left: 0, right: 32, top: 16, bottom: 16 }}
+                      margin={{ left: 0, right: 48, top: 16, bottom: 24 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis
                         type="number"
-                        tickFormatter={(v) => `ZAR ${fmtMoney(v as number)}`}
+                        tickFormatter={(v) =>
+                          metric === "sales"
+                            ? `ZAR ${fmtMoney(v as number)}`
+                            : `${v}`
+                        }
                       />
-                      <YAxis type="category" dataKey="product" width={260} />
+                      <YAxis
+                        type="category"
+                        dataKey="product"
+                        width={320}
+                        tick={{ fontSize: 11 }}
+                      />
                       <Tooltip
                         formatter={(value: any, key: any) => {
-                          const label = key === "salesPrev" ? `${yearA}` : `${yearB}`;
-                          return [`ZAR ${fmtMoney(value)}`, label];
+                          const isPrev = key === valueKeyPrev;
+                          const labelYear = isPrev ? `${yearA}` : `${yearB}`;
+                          const formatted =
+                            metric === "sales"
+                              ? `ZAR ${fmtMoney(value)}`
+                              : `${value} units`;
+                          return [formatted, labelYear];
                         }}
                       />
                       <Bar
-                        dataKey="salesPrev"
+                        dataKey={valueKeyPrev}
                         name={`${yearA}`}
                         radius={[0, 0, 0, 0]}
                         fill="#cfd8dc"
                       />
                       <Bar
-                        dataKey="salesCurr"
+                        dataKey={valueKeyCurr}
                         name={`${yearB}`}
                         radius={[0, 6, 6, 0]}
                         fill="#42a5f5"
                       >
                         <LabelList
-                          dataKey="salesCurr"
+                          dataKey={valueKeyCurr}
                           position="right"
-                          formatter={(v: any) => `ZAR ${fmtMoney(v)}`}
+                          formatter={(v: any) =>
+                            metric === "sales"
+                              ? `ZAR ${fmtMoney(v)}`
+                              : `${v}`
+                          }
                           style={{ fontSize: 11, fill: "#444" }}
                         />
                       </Bar>
