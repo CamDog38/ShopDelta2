@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
-import { computeYoYAnnualAggregate, computeYoYMonthlyProduct } from "../analytics.yoy.server";
+import { computeYoYAnnualAggregate, computeYoYAnnualProduct, computeYoYMonthlyProduct } from "../analytics.yoy.server";
 
 // Support both GET and POST
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -373,57 +373,101 @@ async function handleExport(request: Request) {
     console.warn('[EXPORT] YoY computation failed:', (e as any)?.message || e);
   }
 
-  // Sheet 12: YoY Monthly Product Comparison
+  // Sheet 12: YoY Product Comparison (Monthly or Annual, depending on filters)
   try {
     const compare = url.searchParams.get("compare");
     const compareScope = url.searchParams.get("compareScope");
     const yoyMode = url.searchParams.get("yoyMode") || "monthly";
     const yoyA = url.searchParams.get("yoyA");
     const yoyB = url.searchParams.get("yoyB");
-    
-    if (compare === "yoy" && compareScope === "product" && yoyMode === "monthly" && sDate && eDate) {
-      console.log("[EXPORT] Computing YoY Monthly Product data...");
-      const yoyProduct = await computeYoYMonthlyProduct({ admin, start: sDate, end: eDate, yoyA: yoyA || undefined, yoyB: yoyB || undefined });
-      
-      const monthLabel = (ym?: string) => {
-        if (!ym) return '';
-        const [y, m] = ym.split('-').map((x) => parseInt(x, 10));
-        if (!y || !m) return ym;
-        const d = new Date(Date.UTC(y, m - 1, 1));
-        return `${d.toLocaleString('en-US', { month: 'short' })} ${y}`;
-      };
-      
-      const productComparisonData: any[][] = [
-        ["Product Comparison (YoY Monthly)"],
-        ["Date Range", `${start} to ${end}`],
-        []
-      ];
-      
-      if (yoyA && yoyB) {
-        productComparisonData.push([`Product (${monthLabel(yoyB)} → ${monthLabel(yoyA)})`, `Qty (${monthLabel(yoyB)})`, `Qty (${monthLabel(yoyA)})`, 'Qty Δ', 'Qty Δ%', `Sales (${monthLabel(yoyB)})`, `Sales (${monthLabel(yoyA)})`, 'Sales Δ', 'Sales Δ%']);
-      } else {
-        productComparisonData.push(['Product', 'Qty (Curr)', 'Qty (Prev)', 'Qty Δ', 'Qty Δ%', 'Sales (Curr)', 'Sales (Prev)', 'Sales Δ', 'Sales Δ%']);
+    const yoyYearA = url.searchParams.get("yoyYearA");
+    const yoyYearB = url.searchParams.get("yoyYearB");
+    const yoyYtd = url.searchParams.get("yoyYtd");
+
+    if (compare === "yoy" && compareScope === "product") {
+      if (yoyMode === "monthly" && sDate && eDate) {
+        console.log("[EXPORT] Computing YoY Monthly Product data...");
+        const yoyProduct = await computeYoYMonthlyProduct({ admin, start: sDate, end: eDate, yoyA: yoyA || undefined, yoyB: yoyB || undefined });
+
+        const monthLabel = (ym?: string) => {
+          if (!ym) return '';
+          const [y, m] = ym.split('-').map((x) => parseInt(x, 10));
+          if (!y || !m) return ym;
+          const d = new Date(Date.UTC(y, m - 1, 1));
+          return `${d.toLocaleString('en-US', { month: 'short' })} ${y}`;
+        };
+
+        const productComparisonData: any[][] = [
+          ["Product Comparison (YoY Monthly)"],
+          ["Date Range", `${start} to ${end}`],
+          []
+        ];
+
+        if (yoyA && yoyB) {
+          productComparisonData.push([`Product (${monthLabel(yoyB)}  ${monthLabel(yoyA)})`, `Qty (${monthLabel(yoyB)})`, `Qty (${monthLabel(yoyA)})`, 'Qty ', 'Qty %', `Sales (${monthLabel(yoyB)})`, `Sales (${monthLabel(yoyA)})`, 'Sales ', 'Sales %']);
+        } else {
+          productComparisonData.push(['Product', 'Qty (Curr)', 'Qty (Prev)', 'Qty ', 'Qty %', 'Sales (Curr)', 'Sales (Prev)', 'Sales ', 'Sales %']);
+        }
+
+        yoyProduct.table.forEach((r: any) => {
+          productComparisonData.push([
+            r.product,
+            r.qtyCurr,
+            r.qtyPrev,
+            r.qtyDelta,
+            r.qtyDeltaPct,
+            r.salesCurr,
+            r.salesPrev,
+            r.salesDelta,
+            r.salesDeltaPct
+          ]);
+        });
+
+        const productSheet = XLSX.utils.aoa_to_sheet(productComparisonData);
+        productSheet["!cols"] = [{ wch: 40 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }];
+        formatMoneyColumns(productSheet);
+        XLSX.utils.book_append_sheet(wb, productSheet, "YoY - Products");
+        console.log("[EXPORT] Added 'YoY - Products' sheet with", yoyProduct.table.length, "products");
+      } else if (yoyMode === "annual") {
+        console.log("[EXPORT] Computing YoY Annual Product data...");
+        const now = new Date();
+        const nowY = now.getUTCFullYear();
+        const yearA = yoyYearA ? parseInt(yoyYearA, 10) : nowY - 1;
+        const yearB = yoyYearB ? parseInt(yoyYearB, 10) : nowY;
+        const ytd = !!(yoyYtd && (/^(1|true)$/i).test(yoyYtd));
+        const yoyProductAnnual = await computeYoYAnnualProduct({ admin, yearA, yearB, ytd });
+
+        const title = ytd
+          ? `Product Comparison (YoY Annual YTD ${yearB} vs ${yearA})`
+          : `Product Comparison (YoY Annual ${yearB} vs ${yearA})`;
+
+        const productAnnualData: any[][] = [
+          [title],
+          ["Years", ytd ? `${yearA} YTD vs ${yearB} YTD` : `${yearA} vs ${yearB}`],
+          [],
+          yoyProductAnnual.headers,
+        ];
+
+        yoyProductAnnual.table.forEach((r: any) => {
+          productAnnualData.push([
+            r.product,
+            r.qtyCurr,
+            r.qtyPrev,
+            r.qtyDelta,
+            r.qtyDeltaPct,
+            r.salesCurr,
+            r.salesPrev,
+            r.salesDelta,
+            r.salesDeltaPct,
+          ]);
+        });
+
+        const productAnnualSheet = XLSX.utils.aoa_to_sheet(productAnnualData);
+        productAnnualSheet["!cols"] = [{ wch: 40 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }];
+        formatMoneyColumns(productAnnualSheet);
+        XLSX.utils.book_append_sheet(wb, productAnnualSheet, "YoY - Products (Annual)");
+        console.log("[EXPORT] Added 'YoY - Products (Annual)' sheet with", yoyProductAnnual.table.length, "products");
       }
-      
-      yoyProduct.table.forEach((r: any) => {
-        productComparisonData.push([
-          r.product,
-          r.qtyCurr,
-          r.qtyPrev,
-          r.qtyDelta,
-          r.qtyDeltaPct,
-          r.salesCurr,
-          r.salesPrev,
-          r.salesDelta,
-          r.salesDeltaPct
-        ]);
-      });
-      
-      const productSheet = XLSX.utils.aoa_to_sheet(productComparisonData);
-      productSheet["!cols"] = [{ wch: 40 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }];
-      formatMoneyColumns(productSheet);
-      XLSX.utils.book_append_sheet(wb, productSheet, "YoY - Products");
-      console.log("[EXPORT] Added 'YoY - Products' sheet with", yoyProduct.table.length, "products");
     }
   } catch (e) {
     console.warn('[EXPORT] YoY product computation failed:', (e as any)?.message || e);

@@ -570,7 +570,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           ];
 
           // Keep the high-level summary based on current top date range (no override here)
+        } else if (compareMode === "yoy" && yoyMode === "annual") {
+          // YoY Annual by Product: delegate to dedicated helper so headers reflect selected years
+          const nowY = utcNow.getUTCFullYear();
+          const yearA = yoyYearAParam ? parseInt(yoyYearAParam, 10) : nowY - 1;
+          const yearB = yoyYearBParam ? parseInt(yoyYearBParam, 10) : nowY;
+          const ytd = !!(yoyYtdParam && (/^(1|true)$/i).test(yoyYtdParam));
+          const result = await computeYoYAnnualProduct({ admin, yearA, yearB, ytd });
+          comparison = result.comparison;
+          comparisonTable = result.table;
+          comparisonHeaders = result.headers;
         } else {
+          // YoY Monthly by Product (default or explicit months)
           comparisonHeaders = ["Product", "Qty (Curr)", "Qty (Prev)", "Qty Δ", "Qty Δ%", "Sales (Curr)", "Sales (Prev)", "Sales Δ", "Sales Δ%"];
           // Build monthly product maps for current and previous year
           const monthlyCurrProd = new Map<string, Map<string, { title: string; qty: number; sales: number }>>();
