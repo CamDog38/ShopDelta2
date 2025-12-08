@@ -11,6 +11,11 @@ export function OrdersCountSlide({ slide }: { slide: Slide }) {
     averagePerDay: number;
   };
 
+  const pct = Number.isFinite(growthPercent) ? growthPercent : 0;
+  const isPositive = pct >= 0;
+  const formattedPct = Math.abs(pct).toFixed(2);
+  const badgeTextClass = isPositive ? "text-blue-400" : "text-rose-400";
+
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center px-12">
       <motion.div
@@ -67,7 +72,10 @@ export function OrdersCountSlide({ slide }: { slide: Slide }) {
           transition={{ delay: 0.6 }}
         >
           <div className="text-center px-4 py-2 rounded-xl bg-white/5">
-            <div className="text-2xl font-bold text-blue-400">+{growthPercent}%</div>
+            <div className={`text-2xl font-bold ${badgeTextClass}`}>
+              {isPositive ? "+" : "-"}
+              {formattedPct}%
+            </div>
             <div className="text-xs text-slate-400">vs last year</div>
           </div>
           <div className="text-center px-4 py-2 rounded-xl bg-white/5">

@@ -63,6 +63,9 @@ export type WrapAnalyticsInput = {
   }>;
   shopName?: string | null;
   currencyCode?: string | null;
+  mode?: "year" | "month";
+  periodLabel?: string;
+  compareLabel?: string;
 };
 
 export function buildSlides(input: WrapAnalyticsInput): Slide[] {
@@ -80,6 +83,9 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
     products,
     shopName,
     currencyCode,
+    mode,
+    periodLabel,
+    compareLabel,
   } = input;
 
   const safePct = (v: number | null) => (v == null || !isFinite(v) ? 0 : v);
@@ -115,18 +121,36 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
 
   const slides: Slide[] = [];
 
+  const wrapMode: "year" | "month" = mode === "month" ? "month" : "year";
+  const effectivePeriodLabel =
+    periodLabel || (wrapMode === "year" ? String(yearB) : "This period");
+  const effectiveCompareLabel =
+    compareLabel || (wrapMode === "year" ? String(yearA) : "last year");
+
   slides.push({
     id: "intro",
     type: "intro",
-    title: `${shopName || "Your store"}'s ${yearB} Shopify Wrapped`,
-    subtitle: `A year-over-year look at ${yearB} vs ${yearA}.`,
+    title:
+      wrapMode === "year"
+        ? `${shopName || "Your store"}'s ${yearB} Shopify Wrapped`
+        : `${shopName || "Your store"} in ${effectivePeriodLabel}`,
+    subtitle:
+      wrapMode === "year"
+        ? `A year-over-year look at ${yearB} vs ${yearA}.`
+        : `A look at ${effectivePeriodLabel} vs ${effectiveCompareLabel}.`,
   });
 
   slides.push({
     id: "total-revenue",
     type: "totalRevenue",
-    title: "Your total revenue",
-    subtitle: "Every sale, every transaction, every win.",
+    title:
+      wrapMode === "year"
+        ? "Your total revenue"
+        : `Your revenue in ${effectivePeriodLabel}`,
+    subtitle:
+      wrapMode === "year"
+        ? "Every sale, every transaction, every win."
+        : `How ${effectivePeriodLabel} performed vs ${effectiveCompareLabel}.`,
     payload: {
       amount: totalSalesCurr,
       previousYear: totalSalesPrev,
@@ -138,8 +162,14 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
   slides.push({
     id: "orders-count",
     type: "ordersCount",
-    title: "Units shipped this year",
-    subtitle: "A quick view of demand vs last year.",
+    title:
+      wrapMode === "year"
+        ? "Units shipped this year"
+        : `Units shipped in ${effectivePeriodLabel}`,
+    subtitle:
+      wrapMode === "year"
+        ? "A quick view of demand vs last year."
+        : `A quick view of demand vs ${effectiveCompareLabel}.`,
     payload: {
       total: totalQtyCurr,
       previousYear: totalQtyPrev,
@@ -179,7 +209,10 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
   slides.push({
     id: "recap",
     type: "recap",
-    title: "That was your year.",
+    title:
+      wrapMode === "year"
+        ? "That was your year."
+        : `That was ${effectivePeriodLabel}.`,
     subtitle: "Ready to make the next one even bigger?",
     payload: { handle: shopName || "your brand" },
   });

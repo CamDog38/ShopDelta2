@@ -1,6 +1,6 @@
 import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { Link, useLoaderData, useNavigate } from "@remix-run/react";
 import { Page, BlockStack, Text, Card, InlineStack } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -25,6 +25,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const yearAParam = url.searchParams.get("yearA");
   const ytdParam = url.searchParams.get("ytd");
   const modeParam = url.searchParams.get("mode");
+  const monthParam = url.searchParams.get("month");
 
   const mode: "year" | "month" = modeParam === "month" ? "month" : "year";
 
@@ -34,6 +35,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const yearB = yearBParam ? parseInt(yearBParam, 10) : defaultYearB;
   const yearA = yearAParam ? parseInt(yearAParam, 10) : defaultYearA;
   const ytd = !!(ytdParam && (/^(1|true)$/i).test(ytdParam));
+
+  let month = monthParam ? parseInt(monthParam, 10) : now.getUTCMonth() + 1;
+  if (!Number.isFinite(month) || month < 1 || month > 12) {
+    month = now.getUTCMonth() + 1;
+  }
 
   const { admin } = await authenticate.admin(request);
 
@@ -76,30 +82,29 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ytd,
     }) as any;
   } else {
-    // Month mode: compare current month-to-date vs the same month last year
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const monthEnd = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate(),
-        23,
-        59,
-        59,
-        999,
-      ),
-    );
+    // Month mode: compare selected month vs the same month last year
+    const mm = Math.min(Math.max(month, 1), 12);
+    const mmKey = String(mm).padStart(2, "0");
+    const yoyB = `${yearB}-${mmKey}`;
+    const yoyA = `${yearA}-${mmKey}`;
+
+    const rangeStart = new Date(Date.UTC(yearA, 0, 1));
+    const rangeEnd = new Date(Date.UTC(yearB, 11, 31, 23, 59, 59, 999));
 
     wrapYoY = await computeYoYMonthlyAggregate({
       admin,
-      start: monthStart,
-      end: monthEnd,
+      start: rangeStart,
+      end: rangeEnd,
+      yoyA,
+      yoyB,
     });
 
     const monthlyProducts = await computeYoYMonthlyProduct({
       admin,
-      start: monthStart,
-      end: monthEnd,
+      start: rangeStart,
+      end: rangeEnd,
+      yoyA,
+      yoyB,
     });
 
     wrapProducts = {
@@ -116,12 +121,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
     salesDelta: row.salesDelta,
   }));
 
-  return json({ mode, yearA, yearB, ytd, wrapYoY, wrapProducts, seriesMonth, shopName, currencyCode });
+  return json({ mode, yearA, yearB, month, ytd, wrapYoY, wrapProducts, seriesMonth, shopName, currencyCode });
 }
 
 export default function WrappedPage() {
   const data = useLoaderData<typeof loader>();
-  const { mode, yearA, yearB, ytd, wrapYoY, wrapProducts, seriesMonth, shopName, currencyCode } = data as any;
+  const { mode, yearA, yearB, month, ytd, wrapYoY, wrapProducts, seriesMonth, shopName, currencyCode } = data as any;
+  const navigate = useNavigate();
+
+  const selectedMonth = month as number;
+  const monthName = new Date(Date.UTC(yearB, selectedMonth - 1, 1)).toLocaleString(
+    "en-US",
+    { month: "long" },
+  );
+  const periodLabel = mode === "year" ? String(yearB) : `${monthName} ${yearB}`;
+  const compareLabel = mode === "year" ? String(yearA) : `${monthName} ${yearA}`;
+
+  const handleMonthChange = (value: string) => {
+    const m = parseInt(value, 10);
+    if (!Number.isFinite(m)) return;
+    const params = new URLSearchParams();
+    params.set("mode", "month");
+    params.set("yearB", String(yearB));
+    params.set("month", String(m));
+    navigate(`?${params.toString()}`);
+  };
 
   const wrapSlides = buildSlides({
     yearA,
@@ -145,6 +169,9 @@ export default function WrappedPage() {
     }>,
     shopName,
     currencyCode,
+    mode,
+    periodLabel,
+    compareLabel,
   });
 
   return (
@@ -158,13 +185,13 @@ export default function WrappedPage() {
                 Your Shopify Wrapped
               </Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                A year-in-review story for your store based on live Shopify analytics.
+                A story-driven wrap for {mode === "year" ? `your ${yearB} year` : `${periodLabel}`} vs {compareLabel}.
               </Text>
             </div>
             <div>
               <InlineStack gap="200">
                 <Link
-                  to="?mode=year"
+                  to={`?mode=year&yearB=${yearB}`}
                   style={{
                     padding: "6px 12px",
                     borderRadius: 999,
@@ -181,7 +208,7 @@ export default function WrappedPage() {
                   Year wrap
                 </Link>
                 <Link
-                  to="?mode=month"
+                  to={`?mode=month&yearB=${yearB}&month=${selectedMonth}`}
                   style={{
                     padding: "6px 12px",
                     borderRadius: 999,
@@ -199,6 +226,39 @@ export default function WrappedPage() {
                 </Link>
               </InlineStack>
             </div>
+            {mode === "month" && (
+              <div>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Select month
+                </Text>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => handleMonthChange(e.target.value)}
+                  style={{
+                    marginTop: 4,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(148,163,184,0.6)",
+                    background: "rgba(15,23,42,0.7)",
+                    color: "white",
+                    fontSize: 13,
+                  }}
+               >
+                  {Array.from({ length: 12 }).map((_, idx) => {
+                    const m = idx + 1;
+                    const n = new Date(Date.UTC(yearB, m - 1, 1)).toLocaleString(
+                      "en-US",
+                      { month: "long" },
+                    );
+                    return (
+                      <option key={m} value={m}>
+                        {n}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
             <div style={{ borderRadius: 24, overflow: "hidden" }}>
               <WrapPlayer slides={wrapSlides} />
             </div>

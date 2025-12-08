@@ -13,6 +13,19 @@ export function TotalRevenueSlide({ slide }: { slide: Slide }) {
 
   const currency = currencyCode || "USD";
 
+  const pct = Number.isFinite(growthPercent) ? growthPercent : 0;
+  const isPositive = pct >= 0;
+  const formattedPct = Math.abs(pct).toFixed(2);
+  const arrow = isPositive ? "↑" : "↓";
+  const badgeBgClass = isPositive
+    ? "bg-emerald-500/20 border border-emerald-500/30"
+    : "bg-rose-500/20 border border-rose-500/30";
+  const badgeTextClass = isPositive ? "text-emerald-400" : "text-rose-400";
+
+  const bigNumberClass = isPositive
+    ? "text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 drop-shadow-[0_0_40px_rgba(34,197,94,0.5)]"
+    : "text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-red-400 to-orange-400 drop-shadow-[0_0_40px_rgba(248,113,113,0.5)]";
+
   const formattedAmount = new Intl.NumberFormat(undefined, {
     style: "currency",
     currency,
@@ -68,9 +81,7 @@ export function TotalRevenueSlide({ slide }: { slide: Slide }) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.2, type: "spring" }}
         >
-          <div className="text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 drop-shadow-[0_0_40px_rgba(34,197,94,0.5)]">
-            {formattedAmount}
-          </div>
+          <div className={bigNumberClass}>{formattedAmount}</div>
         </motion.div>
 
         {/* Growth badge */}
@@ -80,8 +91,10 @@ export function TotalRevenueSlide({ slide }: { slide: Slide }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
         >
-          <div className="px-4 py-2 rounded-full bg-emerald-500/20 border border-emerald-500/30">
-            <span className="text-emerald-400 font-bold text-lg">↑ {growthPercent}%</span>
+          <div className={`px-4 py-2 rounded-full ${badgeBgClass}`}>
+            <span className={`${badgeTextClass} font-bold text-lg`}>
+              {arrow} {formattedPct}%
+            </span>
             <span className="text-slate-400 text-sm ml-2">vs last year</span>
           </div>
         </motion.div>
