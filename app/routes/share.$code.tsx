@@ -257,20 +257,9 @@ export default function SharePage() {
     );
   }
 
-  // Show the Wrapped video
+  // Show the Wrapped video - full screen experience
   if (data.slides && data.slides.length > 0) {
-    return (
-      <>
-        <WrapPlayer slides={data.slides} autoAdvanceMs={6500} isShareMode={true} />
-        
-        {/* Footer - positioned at bottom */}
-        <div className="fixed bottom-1 left-1/2 -translate-x-1/2 text-center z-20">
-          <p className="text-slate-500 text-[10px]">
-            Powered by ShopDelta
-          </p>
-        </div>
-      </>
-    );
+    return <WrapPlayer slides={data.slides} autoAdvanceMs={6500} isShareMode={true} />;
   }
 
   // No slides available

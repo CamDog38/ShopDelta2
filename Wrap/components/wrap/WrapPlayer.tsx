@@ -43,16 +43,33 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
   const [isLandscape, setIsLandscape] = useState(true);
   const [showRotatePrompt, setShowRotatePrompt] = useState(false);
 
+  // Request fullscreen when in landscape on mobile
+  const requestFullscreen = useCallback(() => {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+      elem.requestFullscreen().catch(() => {});
+    } else if ((elem as any).webkitRequestFullscreen) {
+      (elem as any).webkitRequestFullscreen();
+    }
+  }, []);
+
   // Check orientation on mobile for share mode
   useEffect(() => {
     if (!isShareMode) return;
     
     const checkOrientation = () => {
       const isLand = window.innerWidth > window.innerHeight;
+      const wasPreviouslyPortrait = !isLandscape;
       setIsLandscape(isLand);
+      
       // Show rotate prompt on mobile portrait
       const isMobile = window.innerWidth < 768 || window.innerHeight < 500;
       setShowRotatePrompt(isMobile && !isLand);
+      
+      // Request fullscreen when rotating to landscape on mobile
+      if (isMobile && isLand && wasPreviouslyPortrait) {
+        requestFullscreen();
+      }
     };
     
     checkOrientation();
@@ -63,7 +80,7 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
       window.removeEventListener("resize", checkOrientation);
       window.removeEventListener("orientationchange", checkOrientation);
     };
-  }, [isShareMode]);
+  }, [isShareMode, isLandscape, requestFullscreen]);
 
   const goNext = useCallback(() => {
     setIndex((prev) => (prev + 1 < slides.length ? prev + 1 : prev));
@@ -229,15 +246,15 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
     );
   }
 
-  // Share mode: Full screen, centered, landscape optimized
+  // Share mode: Full screen, no black edges, fills entire viewport
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white overflow-hidden">
-      {/* Progress bar - full width at top */}
-      <div className="absolute top-3 left-4 right-4 flex gap-1 z-10">
+    <div className="fixed inset-0 w-screen h-screen bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 text-white overflow-hidden">
+      {/* Progress bar - overlaid at top */}
+      <div className="absolute top-2 left-3 right-3 flex gap-0.5 z-20">
         {slides.map((s, i) => (
           <div
             key={s.id}
-            className="relative h-1 flex-1 rounded-full bg-white/10 overflow-hidden"
+            className="relative h-1 flex-1 rounded-full bg-white/20 overflow-hidden"
           >
             <motion.div
               className="absolute inset-y-0 left-0 bg-white"
@@ -254,39 +271,37 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
         ))}
       </div>
 
-      {/* Main slide container - full viewport */}
-      <div className="absolute inset-0 pt-8 pb-12">
-        <div className="relative w-full h-full bg-gradient-to-br from-indigo-500/30 via-slate-900/60 to-fuchsia-500/30 overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={slide.id}
-              initial={{ opacity: 0, x: 60, scale: 0.98 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -60, scale: 0.98 }}
-              transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
-              className="w-full h-full"
-            >
-              {renderSlide()}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+      {/* Main slide container - fills entire viewport */}
+      <div className="absolute inset-0 w-full h-full">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={slide.id}
+            initial={{ opacity: 0, x: 60, scale: 0.98 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -60, scale: 0.98 }}
+            transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
+            className="w-full h-full"
+          >
+            {renderSlide()}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      {/* Navigation controls - bottom right */}
-      <div className="absolute bottom-3 right-4 flex items-center gap-2 text-xs text-white/60 z-10">
+      {/* Navigation controls - overlaid at bottom right */}
+      <div className="absolute bottom-2 right-3 flex items-center gap-2 text-xs text-white/70 z-20">
         <button
           onClick={goPrev}
-          className="px-3 py-1.5 rounded-full border border-white/20 bg-black/30 hover:bg-white/10 transition"
+          className="px-2.5 py-1 rounded-full border border-white/30 bg-black/40 hover:bg-white/20 transition backdrop-blur-sm"
         >
           Prev
         </button>
         <button
           onClick={goNext}
-          className="px-3 py-1.5 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 transition"
+          className="px-2.5 py-1 rounded-full border border-white/30 bg-white/20 hover:bg-white/30 transition backdrop-blur-sm"
         >
           Next
         </button>
-        <div className="ml-2">
+        <div className="ml-1 bg-black/30 px-2 py-0.5 rounded-full backdrop-blur-sm">
           {index + 1} / {slides.length}
         </div>
       </div>
