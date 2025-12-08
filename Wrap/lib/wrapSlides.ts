@@ -292,6 +292,8 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
         growthPercent: Number(aovGrowthPct.toFixed(1)),
         monthlyAov,
         currencyCode,
+        yearA,
+        yearB,
       },
     });
   }
@@ -544,21 +546,18 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
     });
   }
 
-  // Sales Channels slide
-  if (salesChannels && salesChannels.length > 0) {
-    const sortedChannels = [...salesChannels].sort((a, b) => b.sales - a.sales);
-
-    slides.push({
-      id: "sales-channels",
-      type: "salesChannels",
-      title: "Sales by Channel",
-      subtitle: "Where your revenue comes from.",
-      payload: {
-        channels: sortedChannels,
-        currencyCode,
-      },
-    });
-  }
+  // Sales Channels slide - DISABLED: Not useful when only "Online Store" is available
+  // Shopify API doesn't provide detailed channel attribution (Meta, Google, etc.)
+  // if (salesChannels && salesChannels.length > 1) {
+  //   const sortedChannels = [...salesChannels].sort((a, b) => b.sales - a.sales);
+  //   slides.push({
+  //     id: "sales-channels",
+  //     type: "salesChannels",
+  //     title: "Sales by Channel",
+  //     subtitle: "Where your revenue comes from.",
+  //     payload: { channels: sortedChannels, currencyCode },
+  //   });
+  // }
 
   // Fulfillment Speed slide
   if (fulfillmentStats && fulfillmentStats.averageHours > 0) {

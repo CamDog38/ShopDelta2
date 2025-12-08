@@ -34,10 +34,36 @@ import { SalesChannelsSlide } from "./slides/SalesChannelsSlide";
 type Props = {
   slides: Slide[];
   autoAdvanceMs?: number;
+  /** If true, shows centered slide with black edges (for share pages). If false, uses full space (for in-app) */
+  isShareMode?: boolean;
 };
 
-export function WrapPlayer({ slides, autoAdvanceMs = 6500 }: Props) {
+export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }: Props) {
   const [index, setIndex] = useState(0);
+  const [isLandscape, setIsLandscape] = useState(true);
+  const [showRotatePrompt, setShowRotatePrompt] = useState(false);
+
+  // Check orientation on mobile for share mode
+  useEffect(() => {
+    if (!isShareMode) return;
+    
+    const checkOrientation = () => {
+      const isLand = window.innerWidth > window.innerHeight;
+      setIsLandscape(isLand);
+      // Show rotate prompt on mobile portrait
+      const isMobile = window.innerWidth < 768 || window.innerHeight < 500;
+      setShowRotatePrompt(isMobile && !isLand);
+    };
+    
+    checkOrientation();
+    window.addEventListener("resize", checkOrientation);
+    window.addEventListener("orientationchange", checkOrientation);
+    
+    return () => {
+      window.removeEventListener("resize", checkOrientation);
+      window.removeEventListener("orientationchange", checkOrientation);
+    };
+  }, [isShareMode]);
 
   const goNext = useCallback(() => {
     setIndex((prev) => (prev + 1 < slides.length ? prev + 1 : prev));
@@ -115,21 +141,109 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500 }: Props) {
     }
   }
 
+  // Share mode: Show rotate prompt on mobile portrait
+  if (isShareMode && showRotatePrompt) {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white flex flex-col items-center justify-center p-8 z-50">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className="text-6xl mb-6">📱</div>
+          <h2 className="text-2xl font-bold mb-3">Rotate Your Device</h2>
+          <p className="text-slate-400 mb-6">For the best viewing experience, please rotate your device to landscape mode.</p>
+          <motion.div
+            animate={{ rotate: [0, 90, 90, 0] }}
+            transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
+            className="text-5xl"
+          >
+            📲
+          </motion.div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // In-app mode: Full width, no black edges
+  if (!isShareMode) {
+    return (
+      <div className="relative flex h-full min-h-[540px] w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white overflow-hidden">
+        {/* Progress bar */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 w-[480px] max-w-[80vw]">
+          {slides.map((s, i) => (
+            <div
+              key={s.id}
+              className="relative h-1 flex-1 rounded-full bg-white/10 overflow-hidden"
+            >
+              <motion.div
+                className="absolute inset-y-0 left-0 bg-white"
+                initial={{ width: i < index ? "100%" : "0%" }}
+                animate={{
+                  width: i < index ? "100%" : i === index ? "100%" : "0%",
+                }}
+                transition={{
+                  duration: i === index ? autoAdvanceMs / 1000 : 0,
+                  ease: "linear",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Main slide container - full width for in-app */}
+        <div className="relative w-[960px] h-[540px] rounded-3xl bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 border border-white/10 shadow-[0_40px_120px_rgba(0,0,0,0.7)] overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={slide.id}
+              initial={{ opacity: 0, x: 60, scale: 0.98 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -60, scale: 0.98 }}
+              transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
+              className="w-full h-full"
+            >
+              {renderSlide()}
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Navigation controls */}
+          <div className="absolute bottom-4 right-6 flex items-center gap-3 text-xs text-white/60">
+            <button
+              onClick={goPrev}
+              className="px-3 py-1.5 rounded-full border border-white/20 bg-black/20 hover:bg-white/10 transition"
+            >
+              Prev
+            </button>
+            <button
+              onClick={goNext}
+              className="px-3 py-1.5 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 transition"
+            >
+              Next
+            </button>
+            <div className="ml-2">
+              {index + 1} / {slides.length}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Share mode: Full screen, centered, landscape optimized
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white overflow-hidden p-4 sm:p-6 md:p-8">
-      {/* Progress bar - responsive width */}
-      <div className="absolute top-4 sm:top-6 left-1/2 -translate-x-1/2 flex gap-0.5 sm:gap-1 w-[90vw] sm:w-[80vw] md:w-[70vw] lg:w-[60vw] max-w-[600px]">
+    <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white overflow-hidden">
+      {/* Progress bar - full width at top */}
+      <div className="absolute top-3 left-4 right-4 flex gap-1 z-10">
         {slides.map((s, i) => (
           <div
             key={s.id}
-            className="relative h-0.5 sm:h-1 flex-1 rounded-full bg-white/10 overflow-hidden"
+            className="relative h-1 flex-1 rounded-full bg-white/10 overflow-hidden"
           >
             <motion.div
               className="absolute inset-y-0 left-0 bg-white"
               initial={{ width: i < index ? "100%" : "0%" }}
               animate={{
-                width:
-                  i < index ? "100%" : i === index ? "100%" : "0%",
+                width: i < index ? "100%" : i === index ? "100%" : "0%",
               }}
               transition={{
                 duration: i === index ? autoAdvanceMs / 1000 : 0,
@@ -140,38 +254,40 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500 }: Props) {
         ))}
       </div>
 
-      {/* Main slide container - responsive sizing */}
-      <div className="relative w-full max-w-[960px] aspect-video sm:aspect-[16/9] rounded-xl sm:rounded-2xl md:rounded-3xl bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.5)] sm:shadow-[0_40px_120px_rgba(0,0,0,0.7)] overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={slide.id}
-            initial={{ opacity: 0, x: 60, scale: 0.98 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -60, scale: 0.98 }}
-            transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
-            className="w-full h-full"
-          >
-            {renderSlide()}
-          </motion.div>
-        </AnimatePresence>
+      {/* Main slide container - full viewport */}
+      <div className="absolute inset-0 pt-8 pb-12">
+        <div className="relative w-full h-full bg-gradient-to-br from-indigo-500/30 via-slate-900/60 to-fuchsia-500/30 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={slide.id}
+              initial={{ opacity: 0, x: 60, scale: 0.98 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -60, scale: 0.98 }}
+              transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
+              className="w-full h-full"
+            >
+              {renderSlide()}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
 
-        {/* Navigation controls - responsive positioning and sizing */}
-        <div className="absolute bottom-2 sm:bottom-4 right-2 sm:right-6 flex items-center gap-1.5 sm:gap-3 text-[10px] sm:text-xs text-white/60">
-          <button
-            onClick={goPrev}
-            className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-white/20 bg-black/20 hover:bg-white/10 transition"
-          >
-            Prev
-          </button>
-          <button
-            onClick={goNext}
-            className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 transition"
-          >
-            Next
-          </button>
-          <div className="ml-1 sm:ml-2">
-            {index + 1} / {slides.length}
-          </div>
+      {/* Navigation controls - bottom right */}
+      <div className="absolute bottom-3 right-4 flex items-center gap-2 text-xs text-white/60 z-10">
+        <button
+          onClick={goPrev}
+          className="px-3 py-1.5 rounded-full border border-white/20 bg-black/30 hover:bg-white/10 transition"
+        >
+          Prev
+        </button>
+        <button
+          onClick={goNext}
+          className="px-3 py-1.5 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 transition"
+        >
+          Next
+        </button>
+        <div className="ml-2">
+          {index + 1} / {slides.length}
         </div>
       </div>
     </div>

@@ -6,12 +6,14 @@ import type { Slide } from "../../../lib/wrapSlides";
 type MonthlyAov = { month: string; aov: number };
 
 export function AovGrowthSlide({ slide }: { slide: Slide }) {
-  const { startAov, endAov, growthPercent, monthlyAov, currencyCode } = slide.payload as {
+  const { startAov, endAov, growthPercent, monthlyAov, currencyCode, yearA, yearB } = slide.payload as {
     startAov: number;
     endAov: number;
     growthPercent: number;
     monthlyAov: MonthlyAov[];
     currencyCode?: string | null;
+    yearA?: number;
+    yearB?: number;
   };
 
   // Get currency symbol
@@ -83,7 +85,7 @@ export function AovGrowthSlide({ slide }: { slide: Slide }) {
         >
           <div className="text-center">
             <div className="text-4xl font-bold text-slate-400">{currencySymbol}{startAov}</div>
-            <div className="text-xs text-slate-500">Jan AOV</div>
+            <div className="text-xs text-slate-500">{yearA || 2024} AOV</div>
           </div>
           <motion.div
             className={`text-2xl ${isPositive ? "text-emerald-400" : "text-rose-400"}`}
@@ -95,7 +97,7 @@ export function AovGrowthSlide({ slide }: { slide: Slide }) {
           </motion.div>
           <div className="text-center">
             <div className={`text-4xl font-bold ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>{currencySymbol}{endAov}</div>
-            <div className="text-xs text-slate-500">Dec AOV</div>
+            <div className="text-xs text-slate-500">{yearB || 2025} AOV</div>
           </div>
           <motion.div
             className={`ml-4 px-3 py-1 rounded-full ${isPositive ? "bg-emerald-500/20 border border-emerald-500/30" : "bg-rose-500/20 border border-rose-500/30"}`}

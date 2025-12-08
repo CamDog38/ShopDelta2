@@ -260,16 +260,16 @@ export default function SharePage() {
   // Show the Wrapped video
   if (data.slides && data.slides.length > 0) {
     return (
-      <div className="relative">
-        <WrapPlayer slides={data.slides} autoAdvanceMs={6500} />
+      <>
+        <WrapPlayer slides={data.slides} autoAdvanceMs={6500} isShareMode={true} />
         
         {/* Footer - positioned at bottom */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-center">
-          <p className="text-slate-500 text-xs">
+        <div className="fixed bottom-1 left-1/2 -translate-x-1/2 text-center z-20">
+          <p className="text-slate-500 text-[10px]">
             Powered by ShopDelta
           </p>
         </div>
-      </div>
+      </>
     );
   }
 
