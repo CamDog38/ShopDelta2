@@ -36,6 +36,7 @@
     "@shopify/shopify-app-remix": "^3.7.0",
     "@shopify/shopify-app-session-storage-prisma": "^6.0.0",
     "dotenv": "^17.2.2",
+    "framer-motion": "^11.0.0",
     "isbot": "^5.1.0",
     "prisma": "^6.16.2",
     "react": "^18.2.0",
@@ -48,6 +49,7 @@
     "@remix-run/eslint-config": "^2.16.1",
     "@remix-run/route-config": "^2.16.1",
     "@shopify/api-codegen-preset": "^1.1.1",
+    "autoprefixer": "^10.4.20",
     "@types/eslint": "^9.6.1",
     "@types/node": "^22.2.0",
     "@types/react": "^18.2.31",
@@ -55,6 +57,7 @@
     "eslint": "^8.42.0",
     "eslint-config-prettier": "^10.0.1",
     "prettier": "^3.2.4",
+    "tailwindcss": "^3.4.9",
     "typescript": "^5.2.2",
     "vite": "^6.2.2"
   },

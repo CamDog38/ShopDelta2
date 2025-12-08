@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { useState } from "react";
@@ -10,6 +10,9 @@ import {
   computeYoYAnnualAggregate,
   computeYoYAnnualProduct,
 } from "../analytics.yoy.server";
+import wrapStylesUrl from "../../Wrap/globals.css?url";
+import { WrapPlayer } from "../../Wrap/components/wrap/WrapPlayer";
+import { buildSlides } from "../../Wrap/lib/wrapSlides";
 import {
   AreaChart,
   Area,
@@ -23,6 +26,10 @@ import {
   ReferenceLine,
   LabelList,
 } from "recharts";
+
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: wrapStylesUrl },
+];
 
 // Loader: reuse existing analytics helpers but focus on story data
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -41,6 +48,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Authenticate and get Shopify admin client
   const { admin } = await authenticate.admin(request);
+
+  // Fetch basic shop metadata for currency and name
+  const SHOP_QUERY = `#graphql
+    query ShopInfoForVisualisations {
+      shop {
+        name
+        currencyCode
+      }
+    }
+  `;
+
+  let shopName: string | null = null;
+  let currencyCode: string | null = null;
+  try {
+    const res: Response = await admin.graphql(SHOP_QUERY);
+    const data = await res.json();
+    shopName = (data as any)?.data?.shop?.name ?? null;
+    currencyCode = (data as any)?.data?.shop?.currencyCode ?? null;
+  } catch {
+    shopName = null;
+    currencyCode = null;
+  }
 
   const annualYoY: YoYResult = await computeYoYAnnualAggregate({
     admin,
@@ -64,12 +93,36 @@ export async function loader({ request }: LoaderFunctionArgs) {
     salesDelta: row.salesDelta,
   }));
 
-  return json({ yearA, yearB, ytd, annualYoY, annualProducts, seriesMonth });
+  return json({ yearA, yearB, ytd, annualYoY, annualProducts, seriesMonth, shopName, currencyCode });
 }
 
 export default function VisualisationsPage() {
   const data = useLoaderData<typeof loader>();
-  const { yearA, yearB, ytd, annualYoY, annualProducts, seriesMonth } = data as any;
+  const { yearA, yearB, ytd, annualYoY, annualProducts, seriesMonth, shopName, currencyCode } = data as any;
+
+  const wrapSlides = buildSlides({
+    yearA,
+    yearB,
+    isYtd: ytd,
+    totalSalesCurr: annualYoY?.comparison?.current?.sales ?? 0,
+    totalSalesPrev: annualYoY?.comparison?.previous?.sales ?? 0,
+    totalQtyCurr: annualYoY?.comparison?.current?.qty ?? 0,
+    totalQtyPrev: annualYoY?.comparison?.previous?.qty ?? 0,
+    salesDeltaPct: annualYoY?.comparison?.deltas?.salesPct ?? 0,
+    qtyDeltaPct: annualYoY?.comparison?.deltas?.qtyPct ?? 0,
+    monthly: seriesMonth || [],
+    products: (annualProducts?.table || []) as Array<{
+      product: string;
+      salesCurr: number;
+      salesPrev: number;
+      qtyCurr: number;
+      qtyPrev: number;
+      salesDelta: number;
+      salesDeltaPct: number | null;
+    }>,
+    shopName,
+    currencyCode,
+  });
 
   const [metric, setMetric] = useState<"sales" | "qty">("sales");
 
@@ -84,14 +137,17 @@ export default function VisualisationsPage() {
   });
   const [until, setUntil] = useState<string>(() => fmtYMD(today));
 
-  const heroTitle = ytd
-    ? `Year-to-date ${yearB} vs ${yearA}`
-    : `${yearB} vs ${yearA}`;
+  const heroTitle = `Year-over-year ${yearB} vs ${yearA}`;
 
   const totalSalesCurr = annualYoY?.comparison?.current?.sales ?? 0;
   const totalSalesPrev = annualYoY?.comparison?.previous?.sales ?? 0;
   const totalSalesDelta = totalSalesCurr - totalSalesPrev;
   const totalSalesDeltaPct = annualYoY?.comparison?.deltas?.salesPct ?? null;
+
+  const totalQtyCurr = annualYoY?.comparison?.current?.qty ?? 0;
+  const totalQtyPrev = annualYoY?.comparison?.previous?.qty ?? 0;
+  const totalQtyDelta = totalQtyCurr - totalQtyPrev;
+  const totalQtyDeltaPct = annualYoY?.comparison?.deltas?.qtyPct ?? null;
 
   const fmtMoney = (n: number | null | undefined) => {
     const v = Number(n ?? 0);
@@ -101,8 +157,17 @@ export default function VisualisationsPage() {
     }).format(v);
   };
 
+  const currencyLabel = currencyCode || "ZAR";
+
   const fmtPct = (n: number | null | undefined) =>
     n == null ? "–" : `${n.toFixed(1)}%`;
+
+  const fmtDisplayDate = (value: string) => {
+    if (!value) return "";
+    const [y, m, d] = value.split("-");
+    if (!y || !m || !d) return value;
+    return `${d}/${m}/${y}`;
+  };
 
   const top20Products = (() => {
     const rows = (annualProducts?.table || []).slice();
@@ -259,7 +324,7 @@ export default function VisualisationsPage() {
           </div>
           <div style={{ marginTop: 20 }}>
             <Text as="p" variant="bodySm">
-              {heroTitle} · {since} → {until}
+              {heroTitle} for {fmtDisplayDate(since)} → {fmtDisplayDate(until)}
             </Text>
           </div>
           <div style={{ marginTop: 20 }}>
@@ -276,10 +341,10 @@ export default function VisualisationsPage() {
                   Total sales ({yearB})
                 </Text>
                 <Text as="p" variant="headingLg">
-                  ZAR {fmtMoney(totalSalesCurr)}
+                  {currencyLabel} {fmtMoney(totalSalesCurr)}
                 </Text>
                 <Text as="p" variant="bodySm">
-                  vs ZAR {fmtMoney(totalSalesPrev)} last year
+                  vs {currencyLabel} {fmtMoney(totalSalesPrev)} last year
                 </Text>
                 <div
                   style={{
@@ -294,9 +359,45 @@ export default function VisualisationsPage() {
                   }}
                 >
                   <Text as="span" variant="bodySm">
-                    {(totalSalesDelta ?? 0) >= 0 ? "↑" : "↓"} ZAR {fmtMoney(
+                    {(totalSalesDelta ?? 0) >= 0 ? "↑" : "↓"} {currencyLabel} {fmtMoney(
                       Math.abs(totalSalesDelta)
                     )} ({fmtPct(totalSalesDeltaPct)})
+                  </Text>
+                </div>
+              </div>
+              <div
+                style={{
+                  background: "rgba(255,255,255,0.12)",
+                  padding: 16,
+                  borderRadius: 12,
+                  minWidth: 220,
+                }}
+              >
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Total units ({yearB})
+                </Text>
+                <Text as="p" variant="headingLg">
+                  {fmtMoney(totalQtyCurr)} units
+                </Text>
+                <Text as="p" variant="bodySm">
+                  vs {fmtMoney(totalQtyPrev)} units last year
+                </Text>
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    display: "inline-block",
+                    background:
+                      (totalQtyDelta ?? 0) >= 0
+                        ? "rgba(46,213,115,0.35)"
+                        : "rgba(231,76,60,0.35)",
+                  }}
+                >
+                  <Text as="span" variant="bodySm">
+                    {(totalQtyDelta ?? 0) >= 0 ? "↑" : "↓"} {Math.abs(
+                      totalQtyDelta,
+                    ).toLocaleString()} units ({fmtPct(totalQtyDeltaPct)})
                   </Text>
                 </div>
               </div>
@@ -367,7 +468,7 @@ export default function VisualisationsPage() {
                     type="number"
                     tickFormatter={(v) =>
                       metric === "sales"
-                        ? `ZAR ${fmtMoney(v as number)}`
+                        ? `${currencyLabel} ${fmtMoney(v as number)}`
                         : `${v}`
                     }
                   />
@@ -380,7 +481,7 @@ export default function VisualisationsPage() {
                   <Tooltip
                     formatter={(value: any) =>
                       metric === "sales"
-                        ? `ZAR ${fmtMoney(value)}`
+                        ? `${currencyLabel} ${fmtMoney(value)}`
                         : `${value} units`
                     }
                   />
@@ -394,7 +495,7 @@ export default function VisualisationsPage() {
                       position="right"
                       formatter={(v: any) =>
                         metric === "sales"
-                          ? `ZAR ${fmtMoney(v)}`
+                          ? `${currencyLabel} ${fmtMoney(v)}`
                           : `${v}`
                       }
                       style={{ fontSize: 11, fill: "#444" }}
@@ -484,7 +585,7 @@ export default function VisualisationsPage() {
                         type="number"
                         tickFormatter={(v) =>
                           metric === "sales"
-                            ? `ZAR ${fmtMoney(v as number)}`
+                            ? `${currencyLabel} ${fmtMoney(v as number)}`
                             : `${v}`
                         }
                       />
@@ -500,7 +601,7 @@ export default function VisualisationsPage() {
                           const labelYear = isPrev ? `${yearA}` : `${yearB}`;
                           const formatted =
                             metric === "sales"
-                              ? `ZAR ${fmtMoney(value)}`
+                              ? `${currencyLabel} ${fmtMoney(value)}`
                               : `${value} units`;
                           return [formatted, labelYear];
                         }}
@@ -522,7 +623,7 @@ export default function VisualisationsPage() {
                           position="right"
                           formatter={(v: any) =>
                             metric === "sales"
-                              ? `ZAR ${fmtMoney(v)}`
+                              ? `${currencyLabel} ${fmtMoney(v)}`
                               : `${v}`
                           }
                           style={{ fontSize: 11, fill: "#444" }}
@@ -532,6 +633,118 @@ export default function VisualisationsPage() {
                   </ResponsiveContainer>
                 );
               })()}
+            </div>
+          </BlockStack>
+        </Card>
+
+        {/* Story 4 – Products that lost traction */}
+        <Card>
+          <BlockStack gap="300">
+            <div>
+              <Text as="h2" variant="headingMd">
+                Products that cooled off
+              </Text>
+              <Text as="p" variant="bodySm" tone="subdued">
+                Products that were stronger in the previous period but have
+                slipped back this year. Sorted by biggest drop in {" "}
+                {metric === "sales" ? "sales" : "units"}.
+              </Text>
+            </div>
+            <div style={{ width: "100%", height: 380 }}>
+              {(() => {
+                const rows: any[] = annualProducts?.table || [];
+                if (!rows.length) {
+                  return (
+                    <Text as="p" variant="bodySm">
+                      Not enough data yet.
+                    </Text>
+                  );
+                }
+
+                const deltaKey = metric === "sales" ? "salesDelta" : "qtyDelta";
+                const losers = rows
+                  .filter((r) => (r[deltaKey] as number) < 0)
+                  .sort(
+                    (a, b) => (a[deltaKey] as number) - (b[deltaKey] as number),
+                  )
+                  .slice(0, 10)
+                  .reverse();
+
+                if (!losers.length) {
+                  return (
+                    <Text as="p" variant="bodySm">
+                      No products lost meaningful traction in this period.
+                    </Text>
+                  );
+                }
+
+                return (
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={losers}
+                      layout="vertical"
+                      margin={{ left: 0, right: 48, top: 16, bottom: 24 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis
+                        type="number"
+                        tickFormatter={(v) =>
+                          metric === "sales"
+                            ? `${currencyLabel} ${fmtMoney(Math.abs(v as number))}`
+                            : `${Math.abs(v as number)}`
+                        }
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="product"
+                        width={320}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <Tooltip
+                        formatter={(value: any) => {
+                          const formatted =
+                            metric === "sales"
+                              ? `${currencyLabel} ${fmtMoney(Math.abs(value))}`
+                              : `${Math.abs(value)} units`;
+                          return [formatted, "Drop vs last year"];
+                        }}
+                      />
+                      <Bar
+                        dataKey={deltaKey}
+                        radius={[0, 6, 6, 0]}
+                        fill="#e57373"
+                      >
+                        <LabelList
+                          dataKey={deltaKey}
+                          position="right"
+                          formatter={(v: any) =>
+                            metric === "sales"
+                              ? `${currencyLabel} ${fmtMoney(Math.abs(v))}`
+                              : `${Math.abs(v)}`
+                          }
+                          style={{ fontSize: 11, fill: "#444" }}
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                );
+              })()}
+            </div>
+          </BlockStack>
+        </Card>
+
+        <Card>
+          <BlockStack gap="300">
+            <div>
+              <Text as="h2" variant="headingMd">
+                Year in review (prototype)
+              </Text>
+              <Text as="p" variant="bodySm" tone="subdued">
+                Instagram-style wrap experience based on sample data.
+              </Text>
+            </div>
+            <div style={{ borderRadius: 24, overflow: "hidden" }}>
+              <WrapPlayer slides={wrapSlides} />
             </div>
           </BlockStack>
         </Card>
