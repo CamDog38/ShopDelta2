@@ -60,9 +60,6 @@ export function TopProductsSlide({ slide }: { slide: Slide }) {
                 {i + 1}
               </div>
 
-              {/* Product emoji/image */}
-              <div className="text-3xl">{product.image}</div>
-
               {/* Product info */}
               <div className="flex-1">
                 <div className="font-semibold text-white">{product.name}</div>

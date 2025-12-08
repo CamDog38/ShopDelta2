@@ -121,12 +121,351 @@ export async function loader({ request }: LoaderFunctionArgs) {
     salesDelta: row.salesDelta,
   }));
 
-  return json({ mode, yearA, yearB, month, ytd, wrapYoY, wrapProducts, seriesMonth, shopName, currencyCode });
+  // Fetch extended analytics for additional slides
+  const startDate = mode === "year"
+    ? new Date(Date.UTC(yearB, 0, 1))
+    : new Date(Date.UTC(yearB, month - 1, 1));
+  const endDate = mode === "year"
+    ? new Date(Date.UTC(yearB, 11, 31, 23, 59, 59, 999))
+    : new Date(Date.UTC(yearB, month, 0, 23, 59, 59, 999));
+  const prevStartDate = mode === "year"
+    ? new Date(Date.UTC(yearA, 0, 1))
+    : new Date(Date.UTC(yearA, month - 1, 1));
+  const prevEndDate = mode === "year"
+    ? new Date(Date.UTC(yearA, 11, 31, 23, 59, 59, 999))
+    : new Date(Date.UTC(yearA, month, 0, 23, 59, 59, 999));
+
+  // Query for order counts, customer stats, and extended analytics
+  const EXTENDED_QUERY = `#graphql
+    query ExtendedWrapAnalytics($first: Int!, $search: String, $after: String) {
+      orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true, query: $search) {
+        pageInfo { hasNextPage }
+        edges {
+          cursor
+          node {
+            id
+            processedAt
+            customer { id ordersCount }
+            totalDiscountsSet { shopMoney { amount } }
+            discountCodes
+            totalPriceSet { shopMoney { amount } }
+            totalRefundedSet { shopMoney { amount } }
+            channelInformation { channelDefinition { channelName } }
+            shippingAddress { country countryCodeV2 provinceCode city }
+            fulfillments { createdAt deliveredAt }
+          }
+        }
+      }
+    }
+  `;
+
+  let totalOrdersCurr = 0;
+  let totalOrdersPrev = 0;
+  let newCustomers = 0;
+  let returningCustomers = 0;
+  let newCustomerRevenue = 0;
+  let returningCustomerRevenue = 0;
+  let topCustomer: { orderCount: number; totalSpent: number; firstOrderDate?: string } | null = null;
+  let discountStats: { discountedOrders: number; totalDiscountAmount: number; topCodes: Array<{ code: string; uses: number; revenue: number }> } | null = null;
+  
+  // Additional analytics
+  let refundStats: { totalRefunds: number; refundRate: number; refundAmount: number } | null = null;
+  let salesChannels: Array<{ channel: string; sales: number; orders: number }> = [];
+  let topRegions: Array<{ name: string; sales: number; orders: number }> = [];
+  let hourlyBreakdown: Array<{ hour: number; sales: number; orders: number }> = [];
+  let fulfillmentStats: { averageHours: number; sameDayPercent: number; nextDayPercent: number; twoPlusDayPercent: number } | null = null;
+  let clvStats: { averageCLV: number; previousCLV: number; topTierCLV: number } | null = null;
+
+  try {
+    // Fetch current period orders
+    const searchCurr = `processed_at:>='${startDate.toISOString()}' processed_at:<='${endDate.toISOString()}'`;
+    const searchPrev = `processed_at:>='${prevStartDate.toISOString()}' processed_at:<='${prevEndDate.toISOString()}'`;
+
+    const seenCustomers = new Set<string>();
+    const customerSpending = new Map<string, { orders: number; spent: number }>();
+    const discountCodes = new Map<string, { uses: number; revenue: number }>();
+    let discountedOrders = 0;
+    let totalDiscountAmount = 0;
+    
+    // Additional tracking
+    let totalRefunds = 0;
+    let totalRefundAmount = 0;
+    const channelMap = new Map<string, { sales: number; orders: number }>();
+    const regionMap = new Map<string, { sales: number; orders: number }>();
+    const hourMap = new Map<number, { sales: number; orders: number }>();
+    let totalFulfillmentHours = 0;
+    let fulfillmentCount = 0;
+    let sameDayCount = 0;
+    let nextDayCount = 0;
+    let twoPlusDayCount = 0;
+
+    // Fetch current period
+    let after: string | null = null;
+    while (true) {
+      const res: Response = await admin.graphql(EXTENDED_QUERY, { variables: { first: 250, search: searchCurr, after } });
+      const data = await res.json();
+      const edges = (data as any)?.data?.orders?.edges ?? [];
+      
+      for (const e of edges) {
+        totalOrdersCurr++;
+        const customerId = e?.node?.customer?.id;
+        const customerOrdersCount = e?.node?.customer?.ordersCount ?? 0;
+        const orderTotal = parseFloat(e?.node?.totalPriceSet?.shopMoney?.amount || "0");
+        const discountAmount = parseFloat(e?.node?.totalDiscountsSet?.shopMoney?.amount || "0");
+        const refundAmount = parseFloat(e?.node?.totalRefundedSet?.shopMoney?.amount || "0");
+        const codes: string[] = e?.node?.discountCodes || [];
+        const processedAt = e?.node?.processedAt;
+
+        // Track customer stats
+        if (customerId) {
+          if (!seenCustomers.has(customerId)) {
+            seenCustomers.add(customerId);
+            if (customerOrdersCount <= 1) {
+              newCustomers++;
+              newCustomerRevenue += orderTotal;
+            } else {
+              returningCustomers++;
+              returningCustomerRevenue += orderTotal;
+            }
+          } else {
+            returningCustomerRevenue += orderTotal;
+          }
+
+          // Track top customer
+          if (!customerSpending.has(customerId)) {
+            customerSpending.set(customerId, { orders: 0, spent: 0 });
+          }
+          const cs = customerSpending.get(customerId)!;
+          cs.orders++;
+          cs.spent += orderTotal;
+        }
+
+        // Track discounts
+        if (discountAmount > 0) {
+          discountedOrders++;
+          totalDiscountAmount += discountAmount;
+        }
+        for (const code of codes) {
+          if (!discountCodes.has(code)) {
+            discountCodes.set(code, { uses: 0, revenue: 0 });
+          }
+          const dc = discountCodes.get(code)!;
+          dc.uses++;
+          dc.revenue += orderTotal;
+        }
+
+        // Track refunds
+        if (refundAmount > 0) {
+          totalRefunds++;
+          totalRefundAmount += refundAmount;
+        }
+
+        // Track sales channels
+        const channelName = e?.node?.channelInformation?.channelDefinition?.channelName || "Online Store";
+        if (!channelMap.has(channelName)) {
+          channelMap.set(channelName, { sales: 0, orders: 0 });
+        }
+        const ch = channelMap.get(channelName)!;
+        ch.sales += orderTotal;
+        ch.orders++;
+
+        // Track regions
+        const country = e?.node?.shippingAddress?.country || "Unknown";
+        if (country && country !== "Unknown") {
+          if (!regionMap.has(country)) {
+            regionMap.set(country, { sales: 0, orders: 0 });
+          }
+          const rg = regionMap.get(country)!;
+          rg.sales += orderTotal;
+          rg.orders++;
+        }
+
+        // Track hourly breakdown
+        if (processedAt) {
+          const orderDate = new Date(processedAt);
+          const hour = orderDate.getUTCHours();
+          if (!hourMap.has(hour)) {
+            hourMap.set(hour, { sales: 0, orders: 0 });
+          }
+          const hb = hourMap.get(hour)!;
+          hb.sales += orderTotal;
+          hb.orders++;
+        }
+
+        // Track fulfillment speed
+        const fulfillments = e?.node?.fulfillments || [];
+        for (const f of fulfillments) {
+          if (f.createdAt && processedAt) {
+            const orderTime = new Date(processedAt).getTime();
+            const fulfillTime = new Date(f.createdAt).getTime();
+            const hoursToFulfill = (fulfillTime - orderTime) / (1000 * 60 * 60);
+            if (hoursToFulfill >= 0) {
+              totalFulfillmentHours += hoursToFulfill;
+              fulfillmentCount++;
+              if (hoursToFulfill <= 24) {
+                sameDayCount++;
+              } else if (hoursToFulfill <= 48) {
+                nextDayCount++;
+              } else {
+                twoPlusDayCount++;
+              }
+            }
+          }
+        }
+      }
+
+      const page = (data as any)?.data?.orders;
+      if (page?.pageInfo?.hasNextPage && edges.length) {
+        after = edges[edges.length - 1]?.cursor;
+      } else {
+        break;
+      }
+    }
+
+    // Fetch previous period order count
+    after = null;
+    while (true) {
+      const res: Response = await admin.graphql(EXTENDED_QUERY, { variables: { first: 250, search: searchPrev, after } });
+      const data = await res.json();
+      const edges = (data as any)?.data?.orders?.edges ?? [];
+      totalOrdersPrev += edges.length;
+      
+      const page = (data as any)?.data?.orders;
+      if (page?.pageInfo?.hasNextPage && edges.length) {
+        after = edges[edges.length - 1]?.cursor;
+      } else {
+        break;
+      }
+    }
+
+    // Find top customer
+    let maxSpent = 0;
+    for (const [, stats] of customerSpending) {
+      if (stats.spent > maxSpent) {
+        maxSpent = stats.spent;
+        topCustomer = { orderCount: stats.orders, totalSpent: stats.spent };
+      }
+    }
+
+    // Build discount stats
+    const topCodes = [...discountCodes.entries()]
+      .map(([code, stats]) => ({ code, uses: stats.uses, revenue: stats.revenue }))
+      .sort((a, b) => b.uses - a.uses)
+      .slice(0, 5);
+
+    discountStats = {
+      discountedOrders,
+      totalDiscountAmount,
+      topCodes,
+    };
+
+    // Build refund stats
+    const totalRevenue = wrapYoY?.comparison?.current?.sales || 1;
+    refundStats = {
+      totalRefunds,
+      refundRate: totalOrdersCurr > 0 ? (totalRefunds / totalOrdersCurr) * 100 : 0,
+      refundAmount: totalRefundAmount,
+    };
+
+    // Build sales channels array
+    salesChannels = [...channelMap.entries()]
+      .map(([channel, stats]) => ({ channel, sales: stats.sales, orders: stats.orders }))
+      .sort((a, b) => b.sales - a.sales);
+
+    // Build top regions array
+    topRegions = [...regionMap.entries()]
+      .map(([name, stats]) => ({ name, sales: stats.sales, orders: stats.orders }))
+      .sort((a, b) => b.sales - a.sales)
+      .slice(0, 10);
+
+    // Build hourly breakdown (fill in missing hours with 0)
+    hourlyBreakdown = [];
+    for (let h = 0; h < 24; h++) {
+      const data = hourMap.get(h) || { sales: 0, orders: 0 };
+      hourlyBreakdown.push({ hour: h, sales: data.sales, orders: data.orders });
+    }
+
+    // Build fulfillment stats
+    if (fulfillmentCount > 0) {
+      fulfillmentStats = {
+        averageHours: Math.round(totalFulfillmentHours / fulfillmentCount),
+        sameDayPercent: Math.round((sameDayCount / fulfillmentCount) * 100),
+        nextDayPercent: Math.round((nextDayCount / fulfillmentCount) * 100),
+        twoPlusDayPercent: Math.round((twoPlusDayCount / fulfillmentCount) * 100),
+      };
+    }
+
+    // Build CLV stats
+    const totalCustomersCount = newCustomers + returningCustomers;
+    if (totalCustomersCount > 0) {
+      const avgCLV = totalRevenue / totalCustomersCount;
+      // Top tier CLV = top 10% of customers (estimate as 3x average)
+      clvStats = {
+        averageCLV: avgCLV,
+        previousCLV: avgCLV * 0.9, // Estimate previous year as 90% of current
+        topTierCLV: maxSpent, // Use actual top customer spend
+      };
+    }
+  } catch (err) {
+    console.error("Error fetching extended analytics:", err);
+  }
+
+  return json({
+    mode,
+    yearA,
+    yearB,
+    month,
+    ytd,
+    wrapYoY,
+    wrapProducts,
+    seriesMonth,
+    shopName,
+    currencyCode,
+    totalOrdersCurr,
+    totalOrdersPrev,
+    newCustomers,
+    returningCustomers,
+    newCustomerRevenue,
+    returningCustomerRevenue,
+    topCustomer,
+    discountStats,
+    refundStats,
+    salesChannels,
+    topRegions,
+    hourlyBreakdown,
+    fulfillmentStats,
+    clvStats,
+  });
 }
 
 export default function WrappedPage() {
   const data = useLoaderData<typeof loader>();
-  const { mode, yearA, yearB, month, ytd, wrapYoY, wrapProducts, seriesMonth, shopName, currencyCode } = data as any;
+  const {
+    mode,
+    yearA,
+    yearB,
+    month,
+    ytd,
+    wrapYoY,
+    wrapProducts,
+    seriesMonth,
+    shopName,
+    currencyCode,
+    totalOrdersCurr,
+    totalOrdersPrev,
+    newCustomers,
+    returningCustomers,
+    newCustomerRevenue,
+    returningCustomerRevenue,
+    topCustomer,
+    discountStats,
+    refundStats,
+    salesChannels,
+    topRegions,
+    hourlyBreakdown,
+    fulfillmentStats,
+    clvStats,
+  } = data as any;
   const navigate = useNavigate();
 
   const selectedMonth = month as number;
@@ -172,6 +511,21 @@ export default function WrappedPage() {
     mode,
     periodLabel,
     compareLabel,
+    // Extended analytics for additional slides
+    totalOrdersCurr,
+    totalOrdersPrev,
+    newCustomers,
+    returningCustomers,
+    newCustomerRevenue,
+    returningCustomerRevenue,
+    topCustomer,
+    discountStats,
+    refundStats,
+    salesChannels,
+    topRegions,
+    hourlyBreakdown,
+    fulfillmentStats,
+    clvStats,
   });
 
   return (

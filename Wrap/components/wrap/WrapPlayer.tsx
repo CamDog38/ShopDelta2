@@ -113,7 +113,7 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500 }: Props) {
   }
 
   return (
-    <div className="relative flex h-screen w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white overflow-hidden">
+    <div className="relative flex h-full min-h-[540px] w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white overflow-hidden">
       <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 w-[480px] max-w-[80vw]">
         {slides.map((s, i) => (
           <div

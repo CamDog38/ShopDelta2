@@ -22,11 +22,11 @@ export function HeatmapSlide({ slide }: { slide: Slide }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.25, 0.8, 0.25, 1] }}
         >
-          <h2 className="text-2xl font-semibold tracking-tight">
+          <h2 className="text-3xl font-semibold tracking-tight">
             {slide.title}
           </h2>
           {slide.subtitle && (
-            <p className="mt-1 text-xs text-slate-100/85 max-w-xl">
+            <p className="mt-1 text-sm text-slate-100/85 max-w-xl">
               {slide.subtitle}
             </p>
           )}
@@ -42,7 +42,7 @@ export function HeatmapSlide({ slide }: { slide: Slide }) {
             {tiles.map((tile) => (
               <motion.div
                 key={tile.id}
-                className="absolute overflow-hidden text-[9px] leading-snug"
+                className="absolute overflow-hidden text-[11px] leading-snug"
                 style={{
                   left: `${tile.x}%`,
                   top: `${tile.y}%`,
@@ -55,20 +55,20 @@ export function HeatmapSlide({ slide }: { slide: Slide }) {
                 transition={{ duration: 0.4 }}
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-black/35 via-transparent to-black/60" />
-                <div className="relative z-10 flex h-full flex-col justify-between p-1.5">
+                <div className="relative z-10 flex h-full flex-col justify-between p-2">
                   <div className="flex items-baseline justify-between gap-1">
-                    <span className="truncate text-[10px] font-semibold">
+                    <span className="truncate text-[12px] font-semibold">
                       {tile.label}
                     </span>
-                    <span className="text-[9px] font-semibold">
+                    <span className="text-[11px] font-semibold">
                       {tile.changePct > 0 ? "+" : ""}
                       {tile.changePct.toFixed(1)}%
                     </span>
                   </div>
-                  <div className="truncate text-[8px] text-slate-100/85">
+                  <div className="truncate text-[10px] text-slate-100/90">
                     {tile.name}
                   </div>
-                  <div className="mt-0.5 flex items-baseline justify-between text-[7px] text-slate-200/75">
+                  <div className="mt-1 flex items-baseline justify-between text-[9px] text-slate-200/85">
                     <span className="truncate">{tile.sector}</span>
                     <span className="opacity-80">
                       Rev: $
