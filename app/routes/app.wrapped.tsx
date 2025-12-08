@@ -1,8 +1,9 @@
 import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData, useNavigate } from "@remix-run/react";
-import { Page, BlockStack, Text, Card, InlineStack } from "@shopify/polaris";
+import { Link, useLoaderData, useNavigate, useFetcher } from "@remix-run/react";
+import { Page, BlockStack, Text, Card, InlineStack, Button } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
+import { useState } from "react";
 import { authenticate } from "../shopify.server";
 import type { YoYResult } from "../analytics.yoy.server";
 import {
@@ -14,6 +15,7 @@ import {
 import wrapStylesUrl from "../../Wrap/globals.css?url";
 import { WrapPlayer } from "../../Wrap/components/wrap/WrapPlayer";
 import { buildSlides } from "../../Wrap/lib/wrapSlides";
+import { WrappedShareManager } from "../components/WrappedShareManager";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: wrapStylesUrl },
@@ -490,6 +492,14 @@ export default function WrappedPage() {
     clvStats,
   } = data as any;
   const navigate = useNavigate();
+  const sharesFetcher = useFetcher();
+  const [showShareManager, setShowShareManager] = useState(false);
+
+  // Fetch shares when opening the manager
+  const handleOpenShareManager = () => {
+    sharesFetcher.load("/api/wrapped-share");
+    setShowShareManager(true);
+  };
 
   const selectedMonth = month as number;
   const monthName = new Date(Date.UTC(yearB, selectedMonth - 1, 1)).toLocaleString(
@@ -639,9 +649,39 @@ export default function WrappedPage() {
             <div style={{ borderRadius: 24, overflow: "hidden" }}>
               <WrapPlayer slides={wrapSlides} />
             </div>
+            
+            {/* Share Button */}
+            <div style={{ marginTop: 16 }}>
+              <Button
+                onClick={handleOpenShareManager}
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                    <polyline points="16 6 12 2 8 6" />
+                    <line x1="12" y1="2" x2="12" y2="15" />
+                  </svg>
+                }
+              >
+                Share Wrapped
+              </Button>
+            </div>
           </BlockStack>
         </Card>
       </BlockStack>
+
+      {/* Share Manager Modal */}
+      {showShareManager && (
+        <WrappedShareManager
+          shares={(sharesFetcher.data as any)?.shares || []}
+          currentMode={mode}
+          yearA={yearA}
+          yearB={yearB}
+          month={selectedMonth}
+          analyticsData={data}
+          slidesData={wrapSlides}
+          onClose={() => setShowShareManager(false)}
+        />
+      )}
     </Page>
   );
 }

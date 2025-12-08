@@ -26,14 +26,17 @@ export function CustomerLoyaltySlide({ slide }: { slide: Slide }) {
   const currencySymbol = getCurrencySymbol(currencyCode || "USD");
 
   const totalCustomers = newCustomers + returningCustomers;
-  const returningPercent = (returningCustomers / totalCustomers) * 100;
-  const newPercent = 100 - returningPercent;
+  const totalRevenue = newRevenue + returningRevenue;
+  
+  // Use revenue percentages for the donut chart (matches the center display)
+  const returningRevPercent = totalRevenue > 0 ? (returningRevenue / totalRevenue) * 100 : 0;
+  const newRevPercent = 100 - returningRevPercent;
 
-  // Donut chart calculations
+  // Donut chart calculations - based on revenue, not customer count
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
-  const returningDash = (returningPercent / 100) * circumference;
-  const newDash = (newPercent / 100) * circumference;
+  const returningDash = (returningRevPercent / 100) * circumference;
+  const newDash = (newRevPercent / 100) * circumference;
 
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center px-12">

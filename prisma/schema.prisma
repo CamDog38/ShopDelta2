@@ -105,3 +105,105 @@ enum subscription_status {
   CANCELLED
   EXPIRED
 }
+
+// =====================================================
+// ShopDelta - Shopify App (SApp) Models
+// Wrapped Video Sharing Feature
+// =====================================================
+
+/// Stores Shopify shop information for the Wrapped feature
+/// This model contains row level security and requires additional setup for migrations.
+model SApp_Shop {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shopify_domain  String   @unique @db.VarChar(255)
+  shop_name       String?  @db.VarChar(255)
+  currency_code   String   @default("USD") @db.VarChar(10)
+  access_token    String?  @db.Text
+  scope           String?  @db.Text
+  is_active       Boolean  @default(true)
+  installed_at    DateTime @default(now()) @db.Timestamptz(6)
+  uninstalled_at  DateTime? @db.Timestamptz(6)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  wrapped_shares  SApp_WrappedShare[]
+
+  @@index([shopify_domain], map: "idx_sapp_shops_domain")
+  @@map("SApp_Shops")
+}
+
+/// Stores shareable links for Wrapped videos
+/// This model contains row level security and requires additional setup for migrations.
+model SApp_WrappedShare {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shop_id               String    @db.Uuid
+  
+  // Share identification
+  share_code            String    @unique @db.VarChar(32)
+  title                 String?   @db.VarChar(255)
+  
+  // Wrapped configuration
+  wrap_mode             String    @default("year") @db.VarChar(20)
+  year_a                Int?      // comparison year (previous)
+  year_b                Int?      // current year
+  month                 Int?      // for month mode (1-12)
+  
+  // Cached analytics data
+  analytics_data        Json?     @db.JsonB
+  slides_data           Json?     @db.JsonB
+  
+  // Access control
+  password_hash         String?   @db.VarChar(255)
+  is_password_protected Boolean   @default(false)
+  
+  // Time-based access
+  expires_at            DateTime? @db.Timestamptz(6)
+  starts_at             DateTime  @default(now()) @db.Timestamptz(6)
+  
+  // Status
+  is_active             Boolean   @default(true)
+  is_revoked            Boolean   @default(false)
+  revoked_at            DateTime? @db.Timestamptz(6)
+  
+  // Analytics
+  view_count            Int       @default(0)
+  last_viewed_at        DateTime? @db.Timestamptz(6)
+  
+  // Metadata
+  created_by            String?   @db.VarChar(255)
+  created_at            DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime  @default(now()) @db.Timestamptz(6)
+
+  shop                  SApp_Shop @relation(fields: [shop_id], references: [id], onDelete: Cascade)
+  views                 SApp_WrappedShareView[]
+
+  @@index([shop_id], map: "idx_sapp_wrapped_shares_shop")
+  @@index([share_code], map: "idx_sapp_wrapped_shares_code")
+  @@index([is_active, is_revoked], map: "idx_sapp_wrapped_shares_active")
+  @@map("SApp_WrappedShares")
+}
+
+/// Tracks individual views of shared Wrapped videos
+/// This model contains row level security and requires additional setup for migrations.
+model SApp_WrappedShareView {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  share_id         String   @db.Uuid
+  
+  // Viewer info (anonymized)
+  viewer_ip_hash   String?  @db.VarChar(64)
+  user_agent       String?  @db.Text
+  referrer         String?  @db.Text
+  country_code     String?  @db.VarChar(2)
+  
+  // View details
+  viewed_at        DateTime @default(now()) @db.Timestamptz(6)
+  slides_viewed    Int      @default(0)
+  completed        Boolean  @default(false)
+  duration_seconds Int?
+
+  share            SApp_WrappedShare @relation(fields: [share_id], references: [id], onDelete: Cascade)
+
+  @@index([share_id], map: "idx_sapp_share_views_share")
+  @@index([viewed_at], map: "idx_sapp_share_views_date")
+  @@map("SApp_WrappedShareViews")
+}

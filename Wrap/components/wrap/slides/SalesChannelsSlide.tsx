@@ -33,22 +33,37 @@ export function SalesChannelsSlide({ slide }: { slide: Slide }) {
     return `${currencySymbol}${value.toFixed(0)}`;
   };
 
-  // Get channel icon/color
+  // Get channel icon/color with better naming
   const getChannelStyle = (channel: string) => {
     const lowerChannel = channel.toLowerCase();
     if (lowerChannel.includes("online") || lowerChannel.includes("web")) {
-      return { color: "from-blue-500 to-cyan-400", icon: "🌐" };
+      return { color: "from-blue-500 to-cyan-400", icon: "🌐", displayName: "Online Store" };
     }
-    if (lowerChannel.includes("pos") || lowerChannel.includes("point of sale")) {
-      return { color: "from-green-500 to-emerald-400", icon: "🏪" };
+    if (lowerChannel.includes("pos") || lowerChannel.includes("point of sale") || lowerChannel.includes("retail")) {
+      return { color: "from-green-500 to-emerald-400", icon: "🏪", displayName: "Point of Sale" };
     }
     if (lowerChannel.includes("draft") || lowerChannel.includes("manual")) {
-      return { color: "from-purple-500 to-violet-400", icon: "📝" };
+      return { color: "from-purple-500 to-violet-400", icon: "📝", displayName: "Manual Orders" };
     }
     if (lowerChannel.includes("app") || lowerChannel.includes("mobile")) {
-      return { color: "from-orange-500 to-amber-400", icon: "📱" };
+      return { color: "from-orange-500 to-amber-400", icon: "📱", displayName: "Mobile App" };
     }
-    return { color: "from-slate-500 to-slate-400", icon: "📊" };
+    if (lowerChannel.includes("shop") && !lowerChannel.includes("shopify")) {
+      return { color: "from-emerald-500 to-teal-400", icon: "🛍️", displayName: "Shop App" };
+    }
+    if (lowerChannel.includes("facebook") || lowerChannel.includes("meta") || lowerChannel.includes("instagram")) {
+      return { color: "from-blue-600 to-indigo-500", icon: "📘", displayName: "Meta (FB/IG)" };
+    }
+    if (lowerChannel.includes("google")) {
+      return { color: "from-red-500 to-yellow-500", icon: "🔍", displayName: "Google" };
+    }
+    if (lowerChannel.includes("tiktok")) {
+      return { color: "from-pink-500 to-purple-500", icon: "🎵", displayName: "TikTok" };
+    }
+    if (lowerChannel.includes("wholesale") || lowerChannel.includes("b2b")) {
+      return { color: "from-amber-500 to-orange-400", icon: "🏢", displayName: "Wholesale/B2B" };
+    }
+    return { color: "from-slate-500 to-slate-400", icon: "📊", displayName: channel };
   };
 
   return (
@@ -105,7 +120,7 @@ export function SalesChannelsSlide({ slide }: { slide: Slide }) {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-white">{channel.channel}</span>
+                    <span className="text-sm font-medium text-white">{style.displayName}</span>
                     <span className="text-sm font-bold text-white">{formatValue(channel.sales)}</span>
                   </div>
                   <div className="h-3 bg-white/10 rounded-full overflow-hidden">

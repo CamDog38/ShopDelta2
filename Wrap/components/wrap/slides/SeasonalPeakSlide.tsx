@@ -98,12 +98,12 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
           <div className="h-12 w-px bg-white/20" />
           <div className="text-center">
             <div className="text-3xl font-bold text-white">{multiplier}x</div>
-            <div className="text-xs text-slate-400">vs average day</div>
+            <div className="text-xs text-slate-400">vs average month</div>
           </div>
           <div className="h-12 w-px bg-white/20" />
           <div className="text-center">
             <div className="text-3xl font-bold text-slate-400">{currencySymbol}{(averageDayRevenue / 1000).toFixed(1)}K</div>
-            <div className="text-xs text-slate-400">daily average</div>
+            <div className="text-xs text-slate-400">monthly average</div>
           </div>
         </motion.div>
       </div>

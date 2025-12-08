@@ -264,14 +264,21 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
     const aovPrev = totalOrdersPrev > 0 ? totalSalesPrev / totalOrdersPrev : 0;
     const aovGrowthPct = aovPrev > 0 ? ((aovCurr - aovPrev) / aovPrev) * 100 : 0;
 
-    // Build monthly AOV data from monthly sales (estimate orders per month)
+    // Build monthly AOV data - estimate orders per month proportionally to sales
+    // This creates variation in the graph based on actual monthly sales patterns
+    const totalMonthlySales = monthly.reduce((sum, m) => sum + m.salesCurr, 0);
     const monthlyAov = monthly.map((m) => {
-      // Extract month name from period like "Dec 2025 vs Dec 2024"
       const monthMatch = m.period.match(/^(\w+)/);
       const monthName = monthMatch ? monthMatch[1] : m.period.slice(0, 3);
-      // Estimate AOV - use current sales as proxy (we don't have monthly order counts)
-      const estimatedAov = m.salesCurr > 0 ? Math.round(m.salesCurr / Math.max(1, totalQtyCurr / 12)) : 0;
-      return { month: monthName, aov: Math.round(aovCurr) }; // Use overall AOV for consistency
+      // Estimate monthly orders based on proportion of sales
+      const monthlyOrdersEstimate = totalMonthlySales > 0 
+        ? Math.round((m.salesCurr / totalMonthlySales) * totalOrdersCurr)
+        : Math.round(totalOrdersCurr / 12);
+      // Calculate estimated AOV for this month
+      const monthAov = monthlyOrdersEstimate > 0 
+        ? Math.round(m.salesCurr / monthlyOrdersEstimate) 
+        : Math.round(aovCurr);
+      return { month: monthName, aov: monthAov };
     });
 
     slides.push({

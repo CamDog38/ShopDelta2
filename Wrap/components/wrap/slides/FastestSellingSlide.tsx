@@ -6,10 +6,13 @@ import type { Slide } from "../../../lib/wrapSlides";
 export function FastestSellingSlide({ slide }: { slide: Slide }) {
   const { productName, soldOutTime, unitsSold, launchDate } = slide.payload as {
     productName: string;
-    soldOutTime: string;
+    soldOutTime: string; // This is actually the growth percentage
     unitsSold: number;
     launchDate: string;
   };
+
+  // soldOutTime is actually the growth percentage like "+489%"
+  const growthPercent = soldOutTime;
 
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center px-12">
@@ -55,16 +58,16 @@ export function FastestSellingSlide({ slide }: { slide: Slide }) {
           <div className="text-3xl font-bold text-white">{productName}</div>
         </motion.div>
 
-        {/* Sold out time - big emphasis */}
+        {/* Growth percentage - big emphasis */}
         <motion.div
           className="text-center px-8 py-4 rounded-2xl bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.5, type: "spring" }}
         >
-          <div className="text-sm text-slate-300 mb-1">Sold out in just</div>
+          <div className="text-sm text-slate-300 mb-1">Sales Growth</div>
           <div className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
-            {soldOutTime}
+            {growthPercent}
           </div>
         </motion.div>
 
