@@ -67,7 +67,7 @@ export function SalesChannelsSlide({ slide }: { slide: Slide }) {
   };
 
   return (
-    <div className="relative flex h-full w-full flex-col justify-start px-12 py-8">
+    <div className="relative flex min-h-full w-full flex-col justify-start px-4 sm:px-12 py-8 sm:h-full">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_30%_30%,rgba(59,130,246,0.5),transparent_55%),radial-gradient(circle_at_70%_70%,rgba(16,185,129,0.4),transparent_55%)]"
         initial={{ opacity: 0 }}

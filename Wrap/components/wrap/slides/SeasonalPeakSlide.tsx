@@ -31,7 +31,7 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
   const currencySymbol = getCurrencySymbol(currencyCode || "USD");
 
   return (
-    <div className="relative flex min-h-full w-full flex-col justify-start px-4 sm:px-12 py-6 sm:py-8 pb-8">
+    <div className="relative flex min-h-full w-full flex-col justify-start px-4 sm:px-12 py-8 sm:py-8 sm:h-full">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_50%_80%,rgba(249,115,22,0.5),transparent_55%),radial-gradient(circle_at_80%_20%,rgba(234,179,8,0.4),transparent_55%)]"
         initial={{ opacity: 0 }}

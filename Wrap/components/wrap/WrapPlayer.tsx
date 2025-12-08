@@ -40,47 +40,25 @@ type Props = {
 
 export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }: Props) {
   const [index, setIndex] = useState(0);
-  const [isLandscape, setIsLandscape] = useState(true);
-  const [showRotatePrompt, setShowRotatePrompt] = useState(false);
+  const [isMobileShare, setIsMobileShare] = useState(false);
 
-  // Request fullscreen when in landscape on mobile
-  const requestFullscreen = useCallback(() => {
-    const elem = document.documentElement;
-    if (elem.requestFullscreen) {
-      elem.requestFullscreen().catch(() => {});
-    } else if ((elem as any).webkitRequestFullscreen) {
-      (elem as any).webkitRequestFullscreen();
-    }
-  }, []);
-
-  // Check orientation on mobile for share mode
+  // Detect mobile for share mode only
   useEffect(() => {
     if (!isShareMode) return;
     
-    const checkOrientation = () => {
-      const isLand = window.innerWidth > window.innerHeight;
-      const wasPreviouslyPortrait = !isLandscape;
-      setIsLandscape(isLand);
-      
-      // Show rotate prompt on mobile portrait
-      const isMobile = window.innerWidth < 768 || window.innerHeight < 500;
-      setShowRotatePrompt(isMobile && !isLand);
-      
-      // Request fullscreen when rotating to landscape on mobile
-      if (isMobile && isLand && wasPreviouslyPortrait) {
-        requestFullscreen();
-      }
+    const checkMobile = () => {
+      // Mobile detection: small screen width OR landscape with small height
+      const isMobile = window.innerWidth < 768 || (window.innerWidth < 1024 && window.innerHeight < 500);
+      setIsMobileShare(isMobile);
     };
     
-    checkOrientation();
-    window.addEventListener("resize", checkOrientation);
-    window.addEventListener("orientationchange", checkOrientation);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
     
     return () => {
-      window.removeEventListener("resize", checkOrientation);
-      window.removeEventListener("orientationchange", checkOrientation);
+      window.removeEventListener("resize", checkMobile);
     };
-  }, [isShareMode, isLandscape, requestFullscreen]);
+  }, [isShareMode]);
 
   const goNext = useCallback(() => {
     setIndex((prev) => (prev + 1 < slides.length ? prev + 1 : prev));
@@ -158,30 +136,6 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
     }
   }
 
-  // Share mode: Show rotate prompt on mobile portrait
-  if (isShareMode && showRotatePrompt) {
-    return (
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white flex flex-col items-center justify-center p-8 z-50">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center"
-        >
-          <div className="text-6xl mb-6">📱</div>
-          <h2 className="text-2xl font-bold mb-3">Rotate Your Device</h2>
-          <p className="text-slate-400 mb-6">For the best viewing experience, please rotate your device to landscape mode.</p>
-          <motion.div
-            animate={{ rotate: [0, 90, 90, 0] }}
-            transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
-            className="text-5xl"
-          >
-            📲
-          </motion.div>
-        </motion.div>
-      </div>
-    );
-  }
-
   // In-app mode: Full width, no black edges
   if (!isShareMode) {
     return (
@@ -246,14 +200,103 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
     );
   }
 
-  // Share mode: Full screen with scrollable content for mobile
+  // Share mode - Mobile: Scrollable with gradient fade
+  if (isMobileShare) {
+    return (
+      <div 
+        className="fixed inset-0 bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 text-white"
+        style={{ height: '100dvh', width: '100vw' }}
+      >
+        {/* Progress bar - fixed at top */}
+        <div className="fixed top-0 left-0 right-0 z-30 pt-2 px-3 pb-2 bg-gradient-to-b from-slate-900/90 via-slate-900/60 to-transparent">
+          <div className="flex gap-0.5">
+            {slides.map((s, i) => (
+              <div
+                key={s.id}
+                className="relative h-1 flex-1 rounded-full bg-white/20 overflow-hidden"
+              >
+                <motion.div
+                  className="absolute inset-y-0 left-0 bg-white"
+                  initial={{ width: i < index ? "100%" : "0%" }}
+                  animate={{
+                    width: i < index ? "100%" : i === index ? "100%" : "0%",
+                  }}
+                  transition={{
+                    duration: i === index ? autoAdvanceMs / 1000 : 0,
+                    ease: "linear",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Scrollable slide container */}
+        <div className="h-full overflow-y-auto overflow-x-hidden pt-8 pb-16">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={slide.id}
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              transition={{ duration: 0.5, ease: [0.25, 0.8, 0.25, 1] }}
+              className="min-h-full"
+            >
+              {renderSlide()}
+            </motion.div>
+          </AnimatePresence>
+          {/* Bottom padding for scroll indicator */}
+          <div className="h-4" />
+        </div>
+
+        {/* Bottom gradient fade to indicate scrollable content */}
+        <div className="fixed bottom-0 left-0 right-0 h-24 pointer-events-none bg-gradient-to-t from-slate-900/95 via-slate-900/50 to-transparent z-20" />
+
+        {/* Navigation controls - fixed at bottom */}
+        <div className="fixed bottom-2 right-3 flex items-center gap-2 text-xs text-white/80 z-30">
+          <button
+            onClick={goPrev}
+            className="px-3 py-1.5 rounded-full border border-white/30 bg-black/60 hover:bg-white/20 transition backdrop-blur-sm"
+          >
+            Prev
+          </button>
+          <button
+            onClick={goNext}
+            className="px-3 py-1.5 rounded-full border border-white/30 bg-white/20 hover:bg-white/30 transition backdrop-blur-sm"
+          >
+            Next
+          </button>
+          <div className="ml-1 bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm">
+            {index + 1} / {slides.length}
+          </div>
+        </div>
+
+        {/* Scroll hint indicator */}
+        <motion.div 
+          className="fixed bottom-14 left-1/2 -translate-x-1/2 z-20 text-white/40 text-xs flex flex-col items-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+        >
+          <motion.div
+            animate={{ y: [0, 4, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            ↓
+          </motion.div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Share mode - Desktop: Full screen, no scroll needed
   return (
     <div 
-      className="fixed inset-0 bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 text-white"
+      className="fixed inset-0 bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 text-white overflow-hidden"
       style={{ height: '100dvh', width: '100vw' }}
     >
-      {/* Progress bar - fixed at top */}
-      <div className="fixed top-0 left-0 right-0 flex gap-0.5 z-30 px-3 pt-2 pb-1 bg-gradient-to-b from-black/40 to-transparent">
+      {/* Progress bar - overlaid at top */}
+      <div className="absolute top-3 left-4 right-4 flex gap-1 z-20">
         {slides.map((s, i) => (
           <div
             key={s.id}
@@ -274,58 +317,37 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
         ))}
       </div>
 
-      {/* Main slide container - scrollable */}
-      <div 
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden pt-6 pb-14"
-        style={{ WebkitOverflowScrolling: 'touch' }}
-      >
+      {/* Main slide container - full viewport */}
+      <div className="absolute inset-0 pt-8 pb-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={slide.id}
-            initial={{ opacity: 0, x: 60 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -60 }}
-            transition={{ duration: 0.5, ease: [0.25, 0.8, 0.25, 1] }}
-            className="min-h-full w-full"
+            initial={{ opacity: 0, x: 60, scale: 0.98 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -60, scale: 0.98 }}
+            transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
+            className="w-full h-full"
           >
             {renderSlide()}
           </motion.div>
         </AnimatePresence>
-        
-        {/* Scroll indicator - shows briefly */}
-        <motion.div
-          className="fixed bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-white/50 z-20 pointer-events-none"
-          initial={{ opacity: 1 }}
-          animate={{ opacity: 0 }}
-          transition={{ delay: 2, duration: 1 }}
-        >
-          <motion.div
-            animate={{ y: [0, 4, 0] }}
-            transition={{ duration: 1.5, repeat: 2 }}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </motion.div>
-          <span className="text-[10px]">Scroll for more</span>
-        </motion.div>
       </div>
 
-      {/* Navigation controls - fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 flex items-center justify-end gap-2 px-3 py-2 text-xs text-white/70 z-30 bg-gradient-to-t from-black/40 to-transparent">
+      {/* Navigation controls - bottom right */}
+      <div className="absolute bottom-3 right-4 flex items-center gap-2 text-xs text-white/70 z-20">
         <button
           onClick={goPrev}
-          className="px-2.5 py-1 rounded-full border border-white/30 bg-black/40 hover:bg-white/20 transition backdrop-blur-sm"
+          className="px-3 py-1.5 rounded-full border border-white/20 bg-black/30 hover:bg-white/10 transition backdrop-blur-sm"
         >
           Prev
         </button>
         <button
           onClick={goNext}
-          className="px-2.5 py-1 rounded-full border border-white/30 bg-white/20 hover:bg-white/30 transition backdrop-blur-sm"
+          className="px-3 py-1.5 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 transition backdrop-blur-sm"
         >
           Next
         </button>
-        <div className="ml-1 bg-black/30 px-2 py-0.5 rounded-full backdrop-blur-sm">
+        <div className="ml-2 bg-black/20 px-2 py-1 rounded-full">
           {index + 1} / {slides.length}
         </div>
       </div>

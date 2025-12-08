@@ -56,7 +56,7 @@ export function AovGrowthSlide({ slide }: { slide: Slide }) {
   const isPositive = growthPercent >= 0;
 
   return (
-    <div className="relative flex min-h-full w-full flex-col justify-start px-4 sm:px-10 py-6 sm:py-8 pb-8">
+    <div className="relative flex min-h-full w-full flex-col justify-start px-4 sm:px-10 py-8 sm:py-8 sm:h-full">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_80%_80%,rgba(16,185,129,0.5),transparent_55%)]"
         initial={{ opacity: 0 }}

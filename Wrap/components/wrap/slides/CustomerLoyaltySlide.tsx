@@ -39,7 +39,7 @@ export function CustomerLoyaltySlide({ slide }: { slide: Slide }) {
   const newDash = (newRevPercent / 100) * circumference;
 
   return (
-    <div className="relative flex min-h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-8 sm:py-12">
+    <div className="relative flex min-h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-8 sm:py-0 sm:h-full">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_30%_70%,rgba(236,72,153,0.5),transparent_55%),radial-gradient(circle_at_70%_30%,rgba(34,211,238,0.4),transparent_55%)]"
         initial={{ opacity: 0 }}

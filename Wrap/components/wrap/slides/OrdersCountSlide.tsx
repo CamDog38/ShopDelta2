@@ -17,7 +17,7 @@ export function OrdersCountSlide({ slide }: { slide: Slide }) {
   const badgeTextClass = isPositive ? "text-blue-400" : "text-rose-400";
 
   return (
-    <div className="relative flex min-h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-8 sm:py-12">
+    <div className="relative flex min-h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-8 sm:py-0 sm:h-full">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_30%_70%,rgba(59,130,246,0.5),transparent_55%),radial-gradient(circle_at_70%_30%,rgba(139,92,246,0.4),transparent_55%)]"
         initial={{ opacity: 0 }}
@@ -25,13 +25,13 @@ export function OrdersCountSlide({ slide }: { slide: Slide }) {
         transition={{ duration: 1 }}
       />
 
-      <div className="relative z-10 flex flex-col items-center gap-4 sm:gap-6">
+      <div className="relative z-10 flex flex-col items-center gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-lg sm:text-xl font-medium text-slate-300 text-center">{slide.title}</h2>
+          <h2 className="text-xl font-medium text-slate-300 text-center">{slide.title}</h2>
         </motion.div>
 
         {/* Package icon animation */}
@@ -45,7 +45,7 @@ export function OrdersCountSlide({ slide }: { slide: Slide }) {
             animate={{ y: [0, -8, 0] }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           >
-            <svg className="w-12 h-12 sm:w-16 sm:h-16 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-16 h-16 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
           </motion.div>
@@ -58,35 +58,35 @@ export function OrdersCountSlide({ slide }: { slide: Slide }) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.3, type: "spring" }}
         >
-          <div className="text-5xl sm:text-7xl font-bold text-white">
+          <div className="text-7xl font-bold text-white">
             {total.toLocaleString()}
           </div>
-          <div className="text-base sm:text-lg text-slate-400 mt-1">orders shipped</div>
+          <div className="text-lg text-slate-400 mt-1">orders shipped</div>
         </motion.div>
 
         {/* Stats row */}
         <motion.div
-          className="flex gap-4 sm:gap-8 mt-2 sm:mt-4"
+          className="flex gap-8 mt-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
         >
-          <div className="text-center px-3 sm:px-4 py-2 rounded-xl bg-white/5">
-            <div className={`text-xl sm:text-2xl font-bold ${badgeTextClass}`}>
+          <div className="text-center px-4 py-2 rounded-xl bg-white/5">
+            <div className={`text-2xl font-bold ${badgeTextClass}`}>
               {isPositive ? "+" : "-"}
               {formattedPct}%
             </div>
-            <div className="text-[10px] sm:text-xs text-slate-400">vs last year</div>
+            <div className="text-xs text-slate-400">vs last year</div>
           </div>
-          <div className="text-center px-3 sm:px-4 py-2 rounded-xl bg-white/5">
-            <div className="text-xl sm:text-2xl font-bold text-violet-400">{averagePerDay}</div>
-            <div className="text-[10px] sm:text-xs text-slate-400">orders/day avg</div>
+          <div className="text-center px-4 py-2 rounded-xl bg-white/5">
+            <div className="text-2xl font-bold text-violet-400">{averagePerDay}</div>
+            <div className="text-xs text-slate-400">orders/day avg</div>
           </div>
         </motion.div>
 
         {slide.subtitle && (
           <motion.p
-            className="text-xs sm:text-sm text-slate-200/80 text-center max-w-md mt-2 sm:mt-4"
+            className="text-sm text-slate-200/80 text-center max-w-md mt-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.9 }}

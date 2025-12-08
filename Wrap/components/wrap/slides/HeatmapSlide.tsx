@@ -21,7 +21,7 @@ export function HeatmapSlide({ slide }: { slide: Slide }) {
   const currencySymbol = getCurrencySymbol(currencyCode);
 
   return (
-    <div className="relative flex h-full w-full flex-col justify-start px-8 py-6">
+    <div className="relative flex min-h-full w-full flex-col justify-start px-4 sm:px-8 py-8 sm:py-6 sm:h-full">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_0%_0%,rgba(56,189,248,0.45),transparent_55%),radial-gradient(circle_at_100%_100%,rgba(34,197,94,0.45),transparent_55%)]"
         initial={{ opacity: 0, scale: 1.05 }}

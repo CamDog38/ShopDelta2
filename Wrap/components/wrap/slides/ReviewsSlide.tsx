@@ -28,7 +28,7 @@ export function ReviewsSlide({ slide }: { slide: Slide }) {
   });
 
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center px-12">
+    <div className="relative flex min-h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-8 sm:py-0 sm:h-full">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_50%_50%,rgba(234,179,8,0.5),transparent_60%)]"
         initial={{ opacity: 0 }}

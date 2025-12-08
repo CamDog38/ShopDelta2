@@ -30,7 +30,7 @@ export function CustomerLifetimeValueSlide({ slide }: { slide: Slide }) {
   const colors = ["#f59e0b", "#8b5cf6", "#3b82f6", "#6b7280"];
 
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center px-12">
+    <div className="relative flex min-h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-8 sm:py-0 sm:h-full">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.5),transparent_55%)]"
         initial={{ opacity: 0 }}

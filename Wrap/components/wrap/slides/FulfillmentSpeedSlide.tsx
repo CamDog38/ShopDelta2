@@ -21,7 +21,7 @@ export function FulfillmentSpeedSlide({ slide }: { slide: Slide }) {
   const minHours = Math.min(...monthlyTrend.map((m) => m.hours));
 
   return (
-    <div className="relative flex h-full w-full flex-col justify-start px-12 py-8">
+    <div className="relative flex min-h-full w-full flex-col justify-start px-4 sm:px-12 py-8 sm:h-full">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_50%_80%,rgba(34,197,94,0.5),transparent_55%)]"
         initial={{ opacity: 0 }}
