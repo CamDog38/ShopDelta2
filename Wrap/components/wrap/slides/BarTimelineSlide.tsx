@@ -32,11 +32,11 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
     return `${currencySymbol}${value.toFixed(0)}`;
   };
 
-  // Calculate pixel heights for bars (max 160px)
-  const maxBarHeight = 160;
+  // Calculate pixel heights for bars (max 120px on mobile, 160px on desktop)
+  const maxBarHeight = 120;
 
   return (
-    <div className="relative flex h-full w-full flex-col justify-center px-12">
+    <div className="relative flex min-h-full w-full flex-col justify-center px-4 sm:px-12 py-6 sm:py-8">
       <motion.div
         className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(56,189,248,0.4),transparent_55%),radial-gradient(circle_at_0%_100%,rgba(129,140,248,0.4),transparent_55%)] opacity-40"
         initial={{ opacity: 0, scale: 1.05 }}
@@ -44,23 +44,23 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
         transition={{ duration: 1, ease: "easeOut" }}
       />
 
-      <div className="relative z-10 flex flex-col gap-6">
+      <div className="relative z-10 flex flex-col gap-4 sm:gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.25, 0.8, 0.25, 1] }}
         >
-          <h2 className="text-3xl font-semibold tracking-tight">
+          <h2 className="text-xl sm:text-3xl font-semibold tracking-tight">
             {slide.title}
           </h2>
           {slide.subtitle && (
-            <p className="mt-1 text-sm text-slate-100/80">{slide.subtitle}</p>
+            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-slate-100/80">{slide.subtitle}</p>
           )}
         </motion.div>
 
-        <div className="mt-4 flex h-64 items-end gap-2 rounded-2xl bg-black/30 px-4 pb-10 pt-3 backdrop-blur-sm border border-white/10">
+        <div className="mt-2 sm:mt-4 flex h-44 sm:h-64 items-end gap-1 sm:gap-2 rounded-xl sm:rounded-2xl bg-black/30 px-2 sm:px-4 pb-8 sm:pb-10 pt-2 sm:pt-3 backdrop-blur-sm border border-white/10">
           {months.map((m, idx) => {
-            const barHeight = maxViews > 0 ? Math.max((m.views / maxViews) * maxBarHeight, 8) : 8;
+            const barHeight = maxViews > 0 ? Math.max((m.views / maxViews) * maxBarHeight, 4) : 4;
             return (
               <motion.div
                 key={`${m.month}-${idx}`}
@@ -70,7 +70,7 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
                 transition={{ duration: 0.5, delay: idx * 0.05 }}
               >
                 <motion.div
-                  className="text-[9px] text-slate-300/90 font-medium mb-1"
+                  className="text-[7px] sm:text-[9px] text-slate-300/90 font-medium mb-0.5 sm:mb-1"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.5 + idx * 0.05 }}
@@ -78,12 +78,12 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
                   {m.views > 0 ? formatValue(m.views) : ""}
                 </motion.div>
                 <motion.div
-                  className="w-full max-w-[40px] rounded-t-lg bg-gradient-to-t from-indigo-500 to-sky-400 shadow-[0_4px_20px_rgba(56,189,248,0.4)]"
+                  className="w-full max-w-[24px] sm:max-w-[40px] rounded-t-md sm:rounded-t-lg bg-gradient-to-t from-indigo-500 to-sky-400 shadow-[0_4px_20px_rgba(56,189,248,0.4)]"
                   initial={{ height: 0 }}
                   animate={{ height: barHeight }}
                   transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1], delay: 0.2 + idx * 0.05 }}
                 />
-                <div className="text-[11px] text-slate-200/80 mt-2">{m.month}</div>
+                <div className="text-[8px] sm:text-[11px] text-slate-200/80 mt-1 sm:mt-2">{m.month}</div>
               </motion.div>
             );
           })}

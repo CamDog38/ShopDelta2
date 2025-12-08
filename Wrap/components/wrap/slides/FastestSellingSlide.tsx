@@ -15,7 +15,7 @@ export function FastestSellingSlide({ slide }: { slide: Slide }) {
   const growthPercent = soldOutTime;
 
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-4 sm:py-0">
+    <div className="relative flex min-h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-8 sm:py-12">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_30%_50%,rgba(239,68,68,0.5),transparent_55%),radial-gradient(circle_at_70%_50%,rgba(249,115,22,0.4),transparent_55%)]"
         initial={{ opacity: 0 }}

@@ -29,7 +29,7 @@ export function DiscountUsageSlide({ slide }: { slide: Slide }) {
   const maxUses = Math.max(...topCodes.map((c) => c.uses));
 
   return (
-    <div className="relative flex h-full w-full flex-col justify-start px-4 sm:px-12 py-4 sm:py-8">
+    <div className="relative flex min-h-full w-full flex-col justify-start px-4 sm:px-12 py-6 sm:py-8 pb-8">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_20%_50%,rgba(249,115,22,0.5),transparent_55%),radial-gradient(circle_at_80%_50%,rgba(234,179,8,0.4),transparent_55%)]"
         initial={{ opacity: 0 }}

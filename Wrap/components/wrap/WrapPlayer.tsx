@@ -246,14 +246,14 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
     );
   }
 
-  // Share mode: Full screen with dynamic viewport height to handle mobile browser chrome
+  // Share mode: Full screen with scrollable content for mobile
   return (
     <div 
-      className="fixed inset-0 bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 text-white overflow-hidden"
+      className="fixed inset-0 bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 text-white"
       style={{ height: '100dvh', width: '100vw' }}
     >
-      {/* Progress bar - overlaid at top, safe area aware */}
-      <div className="absolute top-[env(safe-area-inset-top,8px)] left-3 right-3 flex gap-0.5 z-20 pt-1">
+      {/* Progress bar - fixed at top */}
+      <div className="fixed top-0 left-0 right-0 flex gap-0.5 z-30 px-3 pt-2 pb-1 bg-gradient-to-b from-black/40 to-transparent">
         {slides.map((s, i) => (
           <div
             key={s.id}
@@ -274,29 +274,45 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
         ))}
       </div>
 
-      {/* Main slide container - uses flex to scale content */}
-      <div className="absolute inset-0 flex flex-col pt-6 pb-10">
-        <div className="flex-1 overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={slide.id}
-              initial={{ opacity: 0, x: 60, scale: 0.98 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -60, scale: 0.98 }}
-              transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
-              className="w-full h-full overflow-auto"
-            >
-              {renderSlide()}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+      {/* Main slide container - scrollable */}
+      <div 
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden pt-6 pb-14"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={slide.id}
+            initial={{ opacity: 0, x: 60 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -60 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.8, 0.25, 1] }}
+            className="min-h-full w-full"
+          >
+            {renderSlide()}
+          </motion.div>
+        </AnimatePresence>
+        
+        {/* Scroll indicator - shows briefly */}
+        <motion.div
+          className="fixed bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-white/50 z-20 pointer-events-none"
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 0 }}
+          transition={{ delay: 2, duration: 1 }}
+        >
+          <motion.div
+            animate={{ y: [0, 4, 0] }}
+            transition={{ duration: 1.5, repeat: 2 }}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </motion.div>
+          <span className="text-[10px]">Scroll for more</span>
+        </motion.div>
       </div>
 
-      {/* Navigation controls - safe area aware at bottom */}
-      <div 
-        className="absolute right-3 flex items-center gap-2 text-xs text-white/70 z-20"
-        style={{ bottom: 'max(env(safe-area-inset-bottom, 8px), 8px)' }}
-      >
+      {/* Navigation controls - fixed at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 flex items-center justify-end gap-2 px-3 py-2 text-xs text-white/70 z-30 bg-gradient-to-t from-black/40 to-transparent">
         <button
           onClick={goPrev}
           className="px-2.5 py-1 rounded-full border border-white/30 bg-black/40 hover:bg-white/20 transition backdrop-blur-sm"
