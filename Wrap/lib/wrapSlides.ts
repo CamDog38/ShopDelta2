@@ -596,9 +596,37 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
         ? ((clvStats.averageCLV - clvStats.previousCLV) / clvStats.previousCLV) * 100
         : 0;
 
-    // Build customer segments
+    // Build customer segments from actual data if available
     const totalCustomersCount = (newCustomers || 0) + (returningCustomers || 0);
-    const segments = [
+    const segmentData = (clvStats as any).segments;
+    
+    const segments = segmentData ? [
+      {
+        name: "VIP",
+        clv: Math.round(segmentData.vip.avgCLV),
+        customers: segmentData.vip.count,
+        percent: totalCustomersCount > 0 ? Math.round((segmentData.vip.count / totalCustomersCount) * 100) : 10,
+      },
+      {
+        name: "Regular",
+        clv: Math.round(segmentData.regular.avgCLV),
+        customers: segmentData.regular.count,
+        percent: totalCustomersCount > 0 ? Math.round((segmentData.regular.count / totalCustomersCount) * 100) : 30,
+      },
+      {
+        name: "Occasional",
+        clv: Math.round(segmentData.occasional.avgCLV),
+        customers: segmentData.occasional.count,
+        percent: totalCustomersCount > 0 ? Math.round((segmentData.occasional.count / totalCustomersCount) * 100) : 40,
+      },
+      {
+        name: "One-time",
+        clv: Math.round(segmentData.oneTime.avgCLV),
+        customers: segmentData.oneTime.count,
+        percent: totalCustomersCount > 0 ? Math.round((segmentData.oneTime.count / totalCustomersCount) * 100) : 20,
+      },
+    ] : [
+      // Fallback to estimated segments if no actual data
       {
         name: "VIP",
         clv: Math.round(clvStats.topTierCLV),

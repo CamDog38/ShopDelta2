@@ -177,7 +177,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let topRegions: Array<{ name: string; sales: number; orders: number }> = [];
   let hourlyBreakdown: Array<{ hour: number; sales: number; orders: number }> = [];
   let fulfillmentStats: { averageHours: number; sameDayPercent: number; nextDayPercent: number; twoPlusDayPercent: number } | null = null;
-  let clvStats: { averageCLV: number; previousCLV: number; topTierCLV: number } | null = null;
+  let clvStats: { 
+    averageCLV: number; 
+    previousCLV: number; 
+    topTierCLV: number;
+    segments?: {
+      vip: { count: number; avgCLV: number };
+      regular: { count: number; avgCLV: number };
+      occasional: { count: number; avgCLV: number };
+      oneTime: { count: number; avgCLV: number };
+    };
+  } | null = null;
 
   try {
     // Fetch current period orders
@@ -421,14 +431,44 @@ export async function loader({ request }: LoaderFunctionArgs) {
       };
     }
 
-    // Build CLV stats
+    // Build CLV stats with actual customer segments
     const totalCustomersCount = newCustomers + returningCustomers;
     if (totalCustomersCount > 0) {
       const avgCLV = totalRevenue / totalCustomersCount;
+      
+      // Calculate actual customer segments based on spending
+      const customerSpends = [...customerSpending.values()].map(c => c.spent).sort((a, b) => b - a);
+      const totalCust = customerSpends.length;
+      
+      // VIP: top 10% of spenders
+      const vipThreshold = Math.ceil(totalCust * 0.1);
+      const vipCustomers = customerSpends.slice(0, vipThreshold);
+      const vipAvgCLV = vipCustomers.length > 0 ? vipCustomers.reduce((a, b) => a + b, 0) / vipCustomers.length : 0;
+      
+      // Regular: next 30% (customers with 2+ orders typically)
+      const regularThreshold = Math.ceil(totalCust * 0.4);
+      const regularCustomers = customerSpends.slice(vipThreshold, regularThreshold);
+      const regularAvgCLV = regularCustomers.length > 0 ? regularCustomers.reduce((a, b) => a + b, 0) / regularCustomers.length : avgCLV;
+      
+      // Occasional: next 40%
+      const occasionalThreshold = Math.ceil(totalCust * 0.8);
+      const occasionalCustomers = customerSpends.slice(regularThreshold, occasionalThreshold);
+      const occasionalAvgCLV = occasionalCustomers.length > 0 ? occasionalCustomers.reduce((a, b) => a + b, 0) / occasionalCustomers.length : avgCLV * 0.5;
+      
+      // One-time: bottom 20%
+      const oneTimeCustomers = customerSpends.slice(occasionalThreshold);
+      const oneTimeAvgCLV = oneTimeCustomers.length > 0 ? oneTimeCustomers.reduce((a, b) => a + b, 0) / oneTimeCustomers.length : avgCLV * 0.2;
+      
       clvStats = {
         averageCLV: avgCLV,
         previousCLV: avgCLV * 0.9, // Estimate previous year as 90% of current
-        topTierCLV: maxSpent, // Use actual top customer spend
+        topTierCLV: vipAvgCLV > 0 ? vipAvgCLV : maxSpent, // Use actual VIP average
+        segments: {
+          vip: { count: vipCustomers.length, avgCLV: vipAvgCLV },
+          regular: { count: regularCustomers.length, avgCLV: regularAvgCLV },
+          occasional: { count: occasionalCustomers.length, avgCLV: occasionalAvgCLV },
+          oneTime: { count: oneTimeCustomers.length, avgCLV: oneTimeAvgCLV },
+        },
       };
     }
   } catch (err) {

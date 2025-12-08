@@ -1,10 +1,16 @@
-import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
+import { json, type LoaderFunctionArgs, type ActionFunctionArgs, type LinksFunction } from "@remix-run/node";
+import { useLoaderData, useActionData, Form, useNavigation, Links, Meta } from "@remix-run/react";
 import { useState, useEffect } from "react";
 import db from "../db.server";
 import crypto from "crypto";
 import { WrapPlayer } from "../../Wrap/components/wrap/WrapPlayer";
 import type { Slide } from "../../Wrap/lib/wrapSlides";
+import wrapStylesUrl from "../../Wrap/globals.css?url";
+
+// Export links for the CSS
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: wrapStylesUrl },
+];
 
 // Hash password for comparison
 function hashPassword(password: string): string {
@@ -254,18 +260,26 @@ export default function SharePage() {
   // Show the Wrapped video
   if (data.slides && data.slides.length > 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
-        <div className="max-w-4xl mx-auto">
-          <WrapPlayer slides={data.slides} autoAdvanceMs={6500} />
-        </div>
-        
-        {/* Footer */}
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 text-center">
-          <p className="text-slate-500 text-xs">
-            Powered by ShopDelta
-          </p>
-        </div>
-      </div>
+      <html lang="en">
+        <head>
+          <meta charSet="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>{data.share?.title || "Shopify Wrapped"} - {data.shopName}</title>
+          <Links />
+        </head>
+        <body className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
+          <div className="max-w-4xl mx-auto">
+            <WrapPlayer slides={data.slides} autoAdvanceMs={6500} />
+          </div>
+          
+          {/* Footer */}
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 text-center">
+            <p className="text-slate-500 text-xs">
+              Powered by ShopDelta
+            </p>
+          </div>
+        </body>
+      </html>
     );
   }
 

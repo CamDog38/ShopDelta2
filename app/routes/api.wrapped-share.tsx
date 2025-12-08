@@ -67,25 +67,46 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 // POST: Create, update, or delete a share
 export async function action({ request }: ActionFunctionArgs) {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shop = session.shop;
 
   const formData = await request.formData();
   const action = formData.get("action") as string;
 
   try {
+    // Get shop info from Shopify for currency
+    let shopName = shop.replace(".myshopify.com", "");
+    let currencyCode = "USD";
+    try {
+      const shopRes = await admin.graphql(`#graphql
+        query { shop { name currencyCode } }
+      `);
+      const shopData = await shopRes.json();
+      shopName = (shopData as any)?.data?.shop?.name || shopName;
+      currencyCode = (shopData as any)?.data?.shop?.currencyCode || "USD";
+    } catch (e) {
+      console.error("Failed to fetch shop info:", e);
+    }
+
     // Get or create the SApp_Shop record
     let sappShop = await db.sApp_Shop.findUnique({
       where: { shopify_domain: shop },
     });
 
     if (!sappShop) {
-      // Create the shop record
+      // Create the shop record with proper currency
       sappShop = await db.sApp_Shop.create({
         data: {
           shopify_domain: shop,
-          shop_name: shop.replace(".myshopify.com", ""),
+          shop_name: shopName,
+          currency_code: currencyCode,
         },
+      });
+    } else if (sappShop.currency_code !== currencyCode) {
+      // Update currency if it changed
+      sappShop = await db.sApp_Shop.update({
+        where: { id: sappShop.id },
+        data: { currency_code: currencyCode, shop_name: shopName },
       });
     }
 
@@ -146,8 +167,22 @@ export async function action({ request }: ActionFunctionArgs) {
       case "delete": {
         const shareId = formData.get("shareId") as string;
 
-        await db.sApp_WrappedShare.delete({
+        // First check if the record exists
+        const existingShare = await db.sApp_WrappedShare.findFirst({
           where: { id: shareId, shop_id: sappShop.id },
+        });
+
+        if (!existingShare) {
+          return json({ error: "Share not found or already deleted" }, { status: 404 });
+        }
+
+        // Delete associated views first (foreign key constraint)
+        await db.sApp_WrappedShareView.deleteMany({
+          where: { share_id: shareId },
+        });
+
+        await db.sApp_WrappedShare.delete({
+          where: { id: shareId },
         });
 
         return json({ success: true });

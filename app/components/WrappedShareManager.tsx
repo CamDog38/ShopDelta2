@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useFetcher } from "@remix-run/react";
 
 type Share = {
@@ -42,6 +42,10 @@ export function WrappedShareManager({
 }: Props) {
   const fetcher = useFetcher();
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isRevoking, setIsRevoking] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const activeLinksRef = useRef<HTMLDivElement>(null);
   const [newShareTitle, setNewShareTitle] = useState(
     currentMode === "year" ? `${yearB} Year in Review` : `${month ? getMonthName(month) : ""} ${yearB} Wrapped`
   );
@@ -50,6 +54,23 @@ export function WrappedShareManager({
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const isSubmitting = fetcher.state === "submitting";
+
+  // Track when a new share is created and scroll to it
+  useEffect(() => {
+    if (fetcher.state === "idle" && isCreating) {
+      setIsCreating(false);
+      // Scroll to the active links section after a short delay
+      setTimeout(() => {
+        activeLinksRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+    if (fetcher.state === "idle" && isRevoking) {
+      setIsRevoking(null);
+    }
+    if (fetcher.state === "idle" && isDeleting) {
+      setIsDeleting(null);
+    }
+  }, [fetcher.state, isCreating, isRevoking, isDeleting]);
 
   function getMonthName(m: number): string {
     return new Date(2000, m - 1, 1).toLocaleString("default", { month: "long" });
@@ -73,6 +94,7 @@ export function WrappedShareManager({
   }
 
   function handleCreateShare() {
+    setIsCreating(true);
     fetcher.submit(
       {
         action: "create",
@@ -94,6 +116,7 @@ export function WrappedShareManager({
 
   function handleRevokeShare(shareId: string) {
     if (confirm("Are you sure you want to revoke this share link? It will no longer be accessible.")) {
+      setIsRevoking(shareId);
       fetcher.submit(
         { action: "revoke", shareId },
         { method: "post", action: "/api/wrapped-share" }
@@ -103,6 +126,7 @@ export function WrappedShareManager({
 
   function handleDeleteShare(shareId: string) {
     if (confirm("Are you sure you want to delete this share link? This cannot be undone.")) {
+      setIsDeleting(shareId);
       fetcher.submit(
         { action: "delete", shareId },
         { method: "post", action: "/api/wrapped-share" }
@@ -198,10 +222,16 @@ export function WrappedShareManager({
                   </button>
                   <button
                     onClick={handleCreateShare}
-                    disabled={isSubmitting}
-                    className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50"
+                    disabled={isSubmitting || isCreating}
+                    className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {isSubmitting ? "Creating..." : "Create Link"}
+                    {(isSubmitting || isCreating) && (
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    )}
+                    {(isSubmitting || isCreating) ? "Creating..." : "Create Link"}
                   </button>
                 </div>
               </div>
@@ -210,7 +240,7 @@ export function WrappedShareManager({
 
           {/* Active Shares */}
           {activeShares.length > 0 && (
-            <div className="mt-6">
+            <div className="mt-6" ref={activeLinksRef}>
               <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
                 Active Links ({activeShares.length})
               </h3>
@@ -239,9 +269,16 @@ export function WrappedShareManager({
                         </button>
                         <button
                           onClick={() => handleRevokeShare(share.id)}
-                          className="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors text-sm"
+                          disabled={isRevoking === share.id}
+                          className="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors text-sm disabled:opacity-50 flex items-center gap-1"
                         >
-                          Revoke
+                          {isRevoking === share.id && (
+                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                          )}
+                          {isRevoking === share.id ? "Revoking..." : "Revoke"}
                         </button>
                       </div>
                     </div>
@@ -287,9 +324,16 @@ export function WrappedShareManager({
                       </div>
                       <button
                         onClick={() => handleDeleteShare(share.id)}
-                        className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors text-sm"
+                        disabled={isDeleting === share.id}
+                        className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors text-sm disabled:opacity-50 flex items-center gap-1"
                       >
-                        Delete
+                        {isDeleting === share.id && (
+                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                        )}
+                        {isDeleting === share.id ? "Deleting..." : "Delete"}
                       </button>
                     </div>
                   </div>
