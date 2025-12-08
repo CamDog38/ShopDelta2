@@ -26,6 +26,7 @@ export type SlideType =
   | "customerLifetimeValue"
   | "topReferrers"
   | "fulfillmentSpeed"
+  | "salesChannels"
   | "recap";
 
 export type Slide = {
@@ -421,6 +422,7 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
           newRevenue: newCustomerRevenue || 0,
           returningRevenue: returningCustomerRevenue || 0,
           returningRevenuePercent: returningRevPct,
+          currencyCode,
         },
       });
     }
@@ -438,6 +440,7 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
         totalSpent: topCustomer.totalSpent,
         memberSince: topCustomer.firstOrderDate || effectivePeriodLabel,
         favoriteCategory: "Top Buyer",
+        currencyCode,
       },
     });
   }
@@ -459,6 +462,7 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
         discountedOrdersPercent: discountedPct,
         totalDiscountAmount: discountStats.totalDiscountAmount,
         topCodes: discountStats.topCodes.slice(0, 5),
+        currencyCode,
       },
     });
   }
@@ -533,22 +537,18 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
     });
   }
 
-  // Sales Channels slide (using barTimeline type for visualization)
+  // Sales Channels slide
   if (salesChannels && salesChannels.length > 0) {
     const sortedChannels = [...salesChannels].sort((a, b) => b.sales - a.sales);
 
     slides.push({
       id: "sales-channels",
-      type: "barTimeline",
+      type: "salesChannels",
       title: "Sales by Channel",
       subtitle: "Where your revenue comes from.",
       payload: {
+        channels: sortedChannels,
         currencyCode,
-        months: sortedChannels.map((c) => ({
-          month: c.channel,
-          posts: c.orders,
-          views: Math.round(c.sales),
-        })),
       },
     });
   }

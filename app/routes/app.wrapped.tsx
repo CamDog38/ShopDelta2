@@ -193,6 +193,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     let totalRefundAmount = 0;
     const channelMap = new Map<string, { sales: number; orders: number }>();
     const regionMap = new Map<string, { sales: number; orders: number }>();
+    const provinceMap = new Map<string, { country: string; province: string; sales: number; orders: number }>();
     const hourMap = new Map<number, { sales: number; orders: number }>();
     let totalFulfillmentHours = 0;
     let fulfillmentCount = 0;
@@ -263,8 +264,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ch.sales += orderTotal;
         ch.orders++;
 
-        // Track regions
+        // Track regions (country level)
         const country = e?.node?.shippingAddress?.country || "Unknown";
+        const province = e?.node?.shippingAddress?.province || e?.node?.shippingAddress?.provinceCode || "";
         if (country && country !== "Unknown") {
           if (!regionMap.has(country)) {
             regionMap.set(country, { sales: 0, orders: 0 });
@@ -272,6 +274,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
           const rg = regionMap.get(country)!;
           rg.sales += orderTotal;
           rg.orders++;
+
+          // Also track province level for drill-down
+          if (province) {
+            const provinceKey = `${country}|${province}`;
+            if (!provinceMap.has(provinceKey)) {
+              provinceMap.set(provinceKey, { country, province, sales: 0, orders: 0 });
+            }
+            const pv = provinceMap.get(provinceKey)!;
+            pv.sales += orderTotal;
+            pv.orders++;
+          }
         }
 
         // Track hourly breakdown
@@ -374,11 +387,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       .map(([channel, stats]) => ({ channel, sales: stats.sales, orders: stats.orders }))
       .sort((a, b) => b.sales - a.sales);
 
-    // Build top regions array
-    topRegions = [...regionMap.entries()]
+    // Build top regions array - if only one country, show provinces instead
+    const countryList = [...regionMap.entries()]
       .map(([name, stats]) => ({ name, sales: stats.sales, orders: stats.orders }))
-      .sort((a, b) => b.sales - a.sales)
-      .slice(0, 10);
+      .sort((a, b) => b.sales - a.sales);
+    
+    if (countryList.length === 1 && provinceMap.size > 0) {
+      // Only one country - show provinces/states instead
+      topRegions = [...provinceMap.values()]
+        .map((p) => ({ name: p.province, sales: p.sales, orders: p.orders }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 10);
+    } else {
+      topRegions = countryList.slice(0, 10);
+    }
 
     // Build hourly breakdown (fill in missing hours with 0)
     hourlyBreakdown = [];

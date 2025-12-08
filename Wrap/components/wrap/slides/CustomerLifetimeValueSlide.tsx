@@ -6,13 +6,26 @@ import type { Slide } from "../../../lib/wrapSlides";
 type Segment = { name: string; clv: number; customers: number; percent: number };
 
 export function CustomerLifetimeValueSlide({ slide }: { slide: Slide }) {
-  const { averageCLV, previousYear, growthPercent, topTierCLV, segments } = slide.payload as {
+  const { averageCLV, previousYear, growthPercent, topTierCLV, segments, currencyCode } = slide.payload as {
     averageCLV: number;
     previousYear: number;
     growthPercent: number;
     topTierCLV: number;
     segments: Segment[];
+    currencyCode?: string | null;
   };
+
+  // Get currency symbol
+  const getCurrencySymbol = (code: string) => {
+    try {
+      return new Intl.NumberFormat("en", { style: "currency", currency: code })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value || code;
+    } catch {
+      return code;
+    }
+  };
+  const currencySymbol = getCurrencySymbol(currencyCode || "USD");
 
   const colors = ["#f59e0b", "#8b5cf6", "#3b82f6", "#6b7280"];
 
@@ -46,7 +59,7 @@ export function CustomerLifetimeValueSlide({ slide }: { slide: Slide }) {
           transition={{ delay: 0.2 }}
         >
           <div className="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-purple-400">
-            ${averageCLV}
+            {currencySymbol}{averageCLV}
           </div>
           <div className="text-sm text-slate-400 mt-1">average customer lifetime value</div>
           <motion.div
@@ -56,7 +69,7 @@ export function CustomerLifetimeValueSlide({ slide }: { slide: Slide }) {
             transition={{ delay: 0.5 }}
           >
             <span className="text-emerald-400 font-bold">+{growthPercent}%</span>
-            <span className="text-slate-400 text-sm">from ${previousYear}</span>
+            <span className="text-slate-400 text-sm">from {currencySymbol}{previousYear}</span>
           </motion.div>
         </motion.div>
 
@@ -99,7 +112,7 @@ export function CustomerLifetimeValueSlide({ slide }: { slide: Slide }) {
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[i] }} />
                   <span className="text-sm font-medium text-white">{seg.name}</span>
                 </div>
-                <div className="text-lg font-bold" style={{ color: colors[i] }}>${seg.clv}</div>
+                <div className="text-lg font-bold" style={{ color: colors[i] }}>{currencySymbol}{seg.clv}</div>
                 <div className="text-xs text-slate-500">{seg.customers.toLocaleString()} customers</div>
               </motion.div>
             ))}
@@ -114,7 +127,7 @@ export function CustomerLifetimeValueSlide({ slide }: { slide: Slide }) {
           transition={{ delay: 1.2 }}
         >
           <span className="text-xs text-slate-500">
-            Your VIP customers are worth <span className="text-amber-400 font-bold">${topTierCLV}</span> each
+            Your VIP customers are worth <span className="text-amber-400 font-bold">{currencySymbol}{topTierCLV}</span> each
           </span>
         </motion.div>
       </div>

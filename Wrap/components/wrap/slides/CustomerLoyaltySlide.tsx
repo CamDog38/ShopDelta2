@@ -4,13 +4,26 @@ import { motion } from "framer-motion";
 import type { Slide } from "../../../lib/wrapSlides";
 
 export function CustomerLoyaltySlide({ slide }: { slide: Slide }) {
-  const { newCustomers, returningCustomers, newRevenue, returningRevenue, returningRevenuePercent } = slide.payload as {
+  const { newCustomers, returningCustomers, newRevenue, returningRevenue, returningRevenuePercent, currencyCode } = slide.payload as {
     newCustomers: number;
     returningCustomers: number;
     newRevenue: number;
     returningRevenue: number;
     returningRevenuePercent: number;
+    currencyCode?: string | null;
   };
+
+  // Get currency symbol
+  const getCurrencySymbol = (code: string) => {
+    try {
+      return new Intl.NumberFormat("en", { style: "currency", currency: code })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value || code;
+    } catch {
+      return code;
+    }
+  };
+  const currencySymbol = getCurrencySymbol(currencyCode || "USD");
 
   const totalCustomers = newCustomers + returningCustomers;
   const returningPercent = (returningCustomers / totalCustomers) * 100;
@@ -125,7 +138,7 @@ export function CustomerLoyaltySlide({ slide }: { slide: Slide }) {
                   {returningCustomers.toLocaleString()} Returning
                 </div>
                 <div className="text-xs text-slate-400">
-                  ${(returningRevenue / 1000000).toFixed(2)}M revenue
+                  {currencySymbol}{(returningRevenue / 1000000).toFixed(2)}M revenue
                 </div>
               </div>
             </motion.div>
@@ -141,7 +154,7 @@ export function CustomerLoyaltySlide({ slide }: { slide: Slide }) {
                   {newCustomers.toLocaleString()} New
                 </div>
                 <div className="text-xs text-slate-400">
-                  ${(newRevenue / 1000000).toFixed(2)}M revenue
+                  {currencySymbol}{(newRevenue / 1000000).toFixed(2)}M revenue
                 </div>
               </div>
             </motion.div>

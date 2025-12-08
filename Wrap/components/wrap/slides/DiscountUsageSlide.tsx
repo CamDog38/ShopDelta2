@@ -6,12 +6,25 @@ import type { Slide } from "../../../lib/wrapSlides";
 type DiscountCode = { code: string; uses: number; revenue: number };
 
 export function DiscountUsageSlide({ slide }: { slide: Slide }) {
-  const { totalDiscountedOrders, discountedOrdersPercent, totalDiscountAmount, topCodes } = slide.payload as {
+  const { totalDiscountedOrders, discountedOrdersPercent, totalDiscountAmount, topCodes, currencyCode } = slide.payload as {
     totalDiscountedOrders: number;
     discountedOrdersPercent: number;
     totalDiscountAmount: number;
     topCodes: DiscountCode[];
+    currencyCode?: string | null;
   };
+
+  // Get currency symbol
+  const getCurrencySymbol = (code: string) => {
+    try {
+      return new Intl.NumberFormat("en", { style: "currency", currency: code })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value || code;
+    } catch {
+      return code;
+    }
+  };
+  const currencySymbol = getCurrencySymbol(currencyCode || "USD");
 
   const maxUses = Math.max(...topCodes.map((c) => c.uses));
 
@@ -48,7 +61,7 @@ export function DiscountUsageSlide({ slide }: { slide: Slide }) {
             <div className="text-xs text-slate-400">orders used discounts</div>
           </div>
           <div className="text-center px-6 py-3 rounded-xl bg-white/5">
-            <div className="text-3xl font-bold text-amber-400">${(totalDiscountAmount / 1000).toFixed(0)}K</div>
+            <div className="text-3xl font-bold text-amber-400">{currencySymbol}{(totalDiscountAmount / 1000).toFixed(0)}K</div>
             <div className="text-xs text-slate-400">total discounts given</div>
           </div>
         </motion.div>
@@ -95,7 +108,7 @@ export function DiscountUsageSlide({ slide }: { slide: Slide }) {
                 </div>
                 <div className="w-24 text-right">
                   <span className="text-sm font-semibold text-white">
-                    ${(code.revenue / 1000).toFixed(0)}K
+                    {currencySymbol}{(code.revenue / 1000).toFixed(0)}K
                   </span>
                   <span className="text-xs text-slate-500 block">revenue</span>
                 </div>

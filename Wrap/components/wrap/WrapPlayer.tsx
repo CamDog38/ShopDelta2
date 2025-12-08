@@ -29,6 +29,7 @@ import { InventoryTurnoverSlide } from "./slides/InventoryTurnoverSlide";
 import { CustomerLifetimeValueSlide } from "./slides/CustomerLifetimeValueSlide";
 import { TopReferrersSlide } from "./slides/TopReferrersSlide";
 import { FulfillmentSpeedSlide } from "./slides/FulfillmentSpeedSlide";
+import { SalesChannelsSlide } from "./slides/SalesChannelsSlide";
 
 type Props = {
   slides: Slide[];
@@ -105,6 +106,8 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500 }: Props) {
         return <TopReferrersSlide slide={slide} />;
       case "fulfillmentSpeed":
         return <FulfillmentSpeedSlide slide={slide} />;
+      case "salesChannels":
+        return <SalesChannelsSlide slide={slide} />;
       case "recap":
         return <RecapSlide slide={slide} />;
       default:

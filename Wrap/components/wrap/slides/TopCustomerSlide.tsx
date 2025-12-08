@@ -4,12 +4,25 @@ import { motion } from "framer-motion";
 import type { Slide } from "../../../lib/wrapSlides";
 
 export function TopCustomerSlide({ slide }: { slide: Slide }) {
-  const { orderCount, totalSpent, memberSince, favoriteCategory } = slide.payload as {
+  const { orderCount, totalSpent, memberSince, favoriteCategory, currencyCode } = slide.payload as {
     orderCount: number;
     totalSpent: number;
     memberSince: string;
     favoriteCategory: string;
+    currencyCode?: string | null;
   };
+
+  // Get currency symbol
+  const getCurrencySymbol = (code: string) => {
+    try {
+      return new Intl.NumberFormat("en", { style: "currency", currency: code })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value || code;
+    } catch {
+      return code;
+    }
+  };
+  const currencySymbol = getCurrencySymbol(currencyCode || "USD");
 
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center px-12">
@@ -81,7 +94,7 @@ export function TopCustomerSlide({ slide }: { slide: Slide }) {
         >
           <div className="text-center">
             <div className="text-2xl font-bold text-white">
-              ${totalSpent.toLocaleString()}
+              {currencySymbol}{totalSpent.toLocaleString()}
             </div>
             <div className="text-xs text-slate-400">Total Spent</div>
           </div>

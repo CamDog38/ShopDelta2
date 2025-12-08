@@ -32,6 +32,9 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
     return `${currencySymbol}${value.toFixed(0)}`;
   };
 
+  // Calculate pixel heights for bars (max 160px)
+  const maxBarHeight = 160;
+
   return (
     <div className="relative flex h-full w-full flex-col justify-center px-12">
       <motion.div
@@ -55,27 +58,16 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
           )}
         </motion.div>
 
-        <motion.div
-          className="mt-4 flex h-64 items-end gap-2 rounded-2xl bg-black/30 px-4 pb-8 pt-3 backdrop-blur-sm border border-white/10"
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: {},
-            visible: {
-              transition: { staggerChildren: 0.06 },
-            },
-          }}
-        >
+        <div className="mt-4 flex h-64 items-end gap-2 rounded-2xl bg-black/30 px-4 pb-10 pt-3 backdrop-blur-sm border border-white/10">
           {months.map((m, idx) => {
-            const height = maxViews > 0 ? Math.max((m.views / maxViews) * 100, 5) : 5;
+            const barHeight = maxViews > 0 ? Math.max((m.views / maxViews) * maxBarHeight, 8) : 8;
             return (
               <motion.div
                 key={`${m.month}-${idx}`}
-                className="flex flex-1 flex-col items-center justify-end gap-1"
-                variants={{
-                  hidden: { opacity: 0, y: 20 },
-                  visible: { opacity: 1, y: 0 },
-                }}
+                className="flex flex-1 flex-col items-center justify-end"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: idx * 0.05 }}
               >
                 <motion.div
                   className="text-[9px] text-slate-300/90 font-medium mb-1"
@@ -86,17 +78,16 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
                   {m.views > 0 ? formatValue(m.views) : ""}
                 </motion.div>
                 <motion.div
-                  className="w-full rounded-t-lg bg-gradient-to-t from-indigo-500 to-sky-400 shadow-[0_4px_20px_rgba(56,189,248,0.4)] min-h-[4px]"
-                  style={{ height: `${height}%` }}
-                  initial={{ scaleY: 0 }}
-                  animate={{ scaleY: 1 }}
-                  transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1], delay: idx * 0.05 }}
+                  className="w-full max-w-[40px] rounded-t-lg bg-gradient-to-t from-indigo-500 to-sky-400 shadow-[0_4px_20px_rgba(56,189,248,0.4)]"
+                  initial={{ height: 0 }}
+                  animate={{ height: barHeight }}
+                  transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1], delay: 0.2 + idx * 0.05 }}
                 />
-                <div className="text-[11px] text-slate-200/80 mt-1">{m.month}</div>
+                <div className="text-[11px] text-slate-200/80 mt-2">{m.month}</div>
               </motion.div>
             );
           })}
-        </motion.div>
+        </div>
       </div>
     </div>
   );
