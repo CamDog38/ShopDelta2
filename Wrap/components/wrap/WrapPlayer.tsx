@@ -116,12 +116,13 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500 }: Props) {
   }
 
   return (
-    <div className="relative flex h-full min-h-[540px] w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white overflow-hidden">
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 w-[480px] max-w-[80vw]">
+    <div className="relative flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white overflow-hidden p-4 sm:p-6 md:p-8">
+      {/* Progress bar - responsive width */}
+      <div className="absolute top-4 sm:top-6 left-1/2 -translate-x-1/2 flex gap-0.5 sm:gap-1 w-[90vw] sm:w-[80vw] md:w-[70vw] lg:w-[60vw] max-w-[600px]">
         {slides.map((s, i) => (
           <div
             key={s.id}
-            className="relative h-1 flex-1 rounded-full bg-white/10 overflow-hidden"
+            className="relative h-0.5 sm:h-1 flex-1 rounded-full bg-white/10 overflow-hidden"
           >
             <motion.div
               className="absolute inset-y-0 left-0 bg-white"
@@ -139,7 +140,8 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500 }: Props) {
         ))}
       </div>
 
-      <div className="relative w-[960px] h-[540px] rounded-3xl bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 border border-white/10 shadow-[0_40px_120px_rgba(0,0,0,0.7)] overflow-hidden">
+      {/* Main slide container - responsive sizing */}
+      <div className="relative w-full max-w-[960px] aspect-video sm:aspect-[16/9] rounded-xl sm:rounded-2xl md:rounded-3xl bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.5)] sm:shadow-[0_40px_120px_rgba(0,0,0,0.7)] overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={slide.id}
@@ -153,20 +155,21 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500 }: Props) {
           </motion.div>
         </AnimatePresence>
 
-        <div className="absolute bottom-4 right-6 flex items-center gap-3 text-xs text-white/60">
+        {/* Navigation controls - responsive positioning and sizing */}
+        <div className="absolute bottom-2 sm:bottom-4 right-2 sm:right-6 flex items-center gap-1.5 sm:gap-3 text-[10px] sm:text-xs text-white/60">
           <button
             onClick={goPrev}
-            className="px-3 py-1.5 rounded-full border border-white/20 bg-black/20 hover:bg-white/10 transition"
+            className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-white/20 bg-black/20 hover:bg-white/10 transition"
           >
             Prev
           </button>
           <button
             onClick={goNext}
-            className="px-3 py-1.5 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 transition"
+            className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 transition"
           >
             Next
           </button>
-          <div className="ml-2">
+          <div className="ml-1 sm:ml-2">
             {index + 1} / {slides.length}
           </div>
         </div>
