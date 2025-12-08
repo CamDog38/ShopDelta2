@@ -253,7 +253,7 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
       title: "Where your revenue came from",
       subtitle:
         "Each tile shows a product's share of revenue and its change vs last year.",
-      payload: { tiles: heatmapTiles },
+      payload: { tiles: heatmapTiles, currencyCode },
     });
   }
 
@@ -305,7 +305,7 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
       type: "barTimeline",
       title: "Monthly Sales Performance",
       subtitle: `How your revenue trended across ${effectivePeriodLabel}.`,
-      payload: { months: barMonths },
+      payload: { months: barMonths, currencyCode },
     });
   }
 
@@ -340,26 +340,60 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
         averageDayRevenue: avgMonthRevenue,
         multiplier: Number(peakMultiplier.toFixed(1)),
         dailyData,
+        currencyCode,
       },
     });
   }
 
-  // Fastest Selling Product slide - product with biggest growth
+  // Fastest Selling Product slide - product with biggest normalized growth
+  // For new products (salesPrev = 0), we normalize by comparing to average product performance
   if (products.length > 0) {
-    const sortedByGrowth = [...products]
-      .filter((p) => p.salesDeltaPct !== null && p.salesPrev > 0)
-      .sort((a, b) => (b.salesDeltaPct ?? 0) - (a.salesDeltaPct ?? 0));
+    const avgSales = totalSalesCurr / Math.max(1, products.length);
+    
+    // Calculate normalized growth score for each product
+    const productsWithScore = products.map((p) => {
+      let growthScore = 0;
+      let displayGrowth = 0;
+      
+      if (p.salesPrev > 0) {
+        // Existing product: use actual growth percentage
+        growthScore = p.salesDeltaPct ?? 0;
+        displayGrowth = p.salesDeltaPct ?? 0;
+      } else if (p.salesCurr > 0) {
+        // New product: normalize by comparing to average
+        // Score = (current sales / average sales) * 100, capped at 500%
+        const relativePerformance = (p.salesCurr / avgSales) * 100;
+        growthScore = Math.min(relativePerformance, 500);
+        displayGrowth = growthScore;
+      }
+      
+      return { ...p, growthScore, displayGrowth };
+    });
+
+    // Sort by growth score, prefer products with actual previous sales for more meaningful comparison
+    const sortedByGrowth = productsWithScore
+      .filter((p) => p.growthScore > 0)
+      .sort((a, b) => {
+        // Prioritize products with previous sales (more meaningful growth)
+        if (a.salesPrev > 0 && b.salesPrev === 0) return -1;
+        if (b.salesPrev > 0 && a.salesPrev === 0) return 1;
+        return b.growthScore - a.growthScore;
+      });
 
     if (sortedByGrowth.length > 0) {
       const fastest = sortedByGrowth[0];
+      const isNewProduct = fastest.salesPrev === 0;
+      
       slides.push({
         id: "fastest-selling",
         type: "fastestSelling",
         title: "Fastest Growing Product",
-        subtitle: "This product saw the biggest jump in sales.",
+        subtitle: isNewProduct 
+          ? "This new product is outperforming the average."
+          : "This product saw the biggest jump in sales.",
         payload: {
           productName: fastest.product,
-          soldOutTime: `+${safePct(fastest.salesDeltaPct).toFixed(0)}%`,
+          soldOutTime: `+${fastest.displayGrowth.toFixed(0)}%`,
           unitsSold: fastest.qtyCurr,
           launchDate: effectivePeriodLabel,
         },
@@ -494,6 +528,7 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
         topRegion: topRegion.name,
         topRegionSales: topRegion.sales,
         regions: sortedRegions.slice(0, 8),
+        currencyCode,
       },
     });
   }
@@ -508,6 +543,7 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
       title: "Sales by Channel",
       subtitle: "Where your revenue comes from.",
       payload: {
+        currencyCode,
         months: sortedChannels.map((c) => ({
           month: c.channel,
           posts: c.orders,

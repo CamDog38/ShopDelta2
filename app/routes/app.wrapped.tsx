@@ -136,6 +136,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     : new Date(Date.UTC(yearA, month, 0, 23, 59, 59, 999));
 
   // Query for order counts, customer stats, and extended analytics
+  // Note: ordersCount was removed from Customer type in 2025-01 API, so we track it ourselves
   const EXTENDED_QUERY = `#graphql
     query ExtendedWrapAnalytics($first: Int!, $search: String, $after: String) {
       orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true, query: $search) {
@@ -145,7 +146,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           node {
             id
             processedAt
-            customer { id ordersCount }
+            customer { id }
             totalDiscountsSet { shopMoney { amount } }
             discountCodes
             totalPriceSet { shopMoney { amount } }
@@ -209,35 +210,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
       for (const e of edges) {
         totalOrdersCurr++;
         const customerId = e?.node?.customer?.id;
-        const customerOrdersCount = e?.node?.customer?.ordersCount ?? 0;
         const orderTotal = parseFloat(e?.node?.totalPriceSet?.shopMoney?.amount || "0");
         const discountAmount = parseFloat(e?.node?.totalDiscountsSet?.shopMoney?.amount || "0");
         const refundAmount = parseFloat(e?.node?.totalRefundedSet?.shopMoney?.amount || "0");
         const codes: string[] = e?.node?.discountCodes || [];
         const processedAt = e?.node?.processedAt;
 
-        // Track customer stats
+        // Track customer stats - determine new vs returning by tracking orders in this period
         if (customerId) {
-          if (!seenCustomers.has(customerId)) {
-            seenCustomers.add(customerId);
-            if (customerOrdersCount <= 1) {
-              newCustomers++;
-              newCustomerRevenue += orderTotal;
-            } else {
-              returningCustomers++;
-              returningCustomerRevenue += orderTotal;
-            }
-          } else {
-            returningCustomerRevenue += orderTotal;
-          }
-
-          // Track top customer
+          // Track top customer spending
           if (!customerSpending.has(customerId)) {
             customerSpending.set(customerId, { orders: 0, spent: 0 });
           }
           const cs = customerSpending.get(customerId)!;
           cs.orders++;
           cs.spent += orderTotal;
+
+          // First time seeing this customer in current period
+          if (!seenCustomers.has(customerId)) {
+            seenCustomers.add(customerId);
+            // If this is their first order in this period, check if they have more orders
+            // We'll classify based on their order count in this period at the end
+          }
         }
 
         // Track discounts
@@ -338,9 +332,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       }
     }
 
-    // Find top customer
+    // Calculate new vs returning customers based on order count in this period
+    // Customers with 1 order = new, customers with 2+ orders = returning
     let maxSpent = 0;
     for (const [, stats] of customerSpending) {
+      if (stats.orders === 1) {
+        newCustomers++;
+        newCustomerRevenue += stats.spent;
+      } else {
+        returningCustomers++;
+        returningCustomerRevenue += stats.spent;
+      }
       if (stats.spent > maxSpent) {
         maxSpent = stats.spent;
         topCustomer = { orderCount: stats.orders, totalSpent: stats.spent };
@@ -399,7 +401,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const totalCustomersCount = newCustomers + returningCustomers;
     if (totalCustomersCount > 0) {
       const avgCLV = totalRevenue / totalCustomersCount;
-      // Top tier CLV = top 10% of customers (estimate as 3x average)
       clvStats = {
         averageCLV: avgCLV,
         previousCLV: avgCLV * 0.9, // Estimate previous year as 90% of current

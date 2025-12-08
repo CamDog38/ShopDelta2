@@ -9,14 +9,31 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
     posts: number;
     views: number;
   }[];
+  const currencyCode = (slide.payload?.currencyCode as string) || "USD";
 
-  const maxViews = months.reduce(
-    (max, m) => (m.views > max ? m.views : max),
-    0
-  );
+  const maxViews = Math.max(...months.map((m) => m.views), 1);
+
+  // Get currency symbol
+  const getCurrencySymbol = (code: string) => {
+    try {
+      return new Intl.NumberFormat("en", { style: "currency", currency: code })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value || code;
+    } catch {
+      return code;
+    }
+  };
+  const currencySymbol = getCurrencySymbol(currencyCode);
+
+  // Format currency for display
+  const formatValue = (value: number) => {
+    if (value >= 1000000) return `${currencySymbol}${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `${currencySymbol}${(value / 1000).toFixed(0)}K`;
+    return `${currencySymbol}${value.toFixed(0)}`;
+  };
 
   return (
-    <div className="relative flex h-full w-full flex-col justify-center px-16">
+    <div className="relative flex h-full w-full flex-col justify-center px-12">
       <motion.div
         className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(56,189,248,0.4),transparent_55%),radial-gradient(circle_at_0%_100%,rgba(129,140,248,0.4),transparent_55%)] opacity-40"
         initial={{ opacity: 0, scale: 1.05 }}
@@ -39,7 +56,7 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
         </motion.div>
 
         <motion.div
-          className="mt-4 flex h-52 items-end gap-3 rounded-2xl bg-black/30 px-4 pb-4 pt-3 backdrop-blur-sm border border-white/10"
+          className="mt-4 flex h-64 items-end gap-2 rounded-2xl bg-black/30 px-4 pb-8 pt-3 backdrop-blur-sm border border-white/10"
           initial="hidden"
           animate="visible"
           variants={{
@@ -49,11 +66,11 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
             },
           }}
         >
-          {months.map((m) => {
-            const height = maxViews ? (m.views / maxViews) * 100 : 0;
+          {months.map((m, idx) => {
+            const height = maxViews > 0 ? Math.max((m.views / maxViews) * 100, 5) : 5;
             return (
               <motion.div
-                key={m.month}
+                key={`${m.month}-${idx}`}
                 className="flex flex-1 flex-col items-center justify-end gap-1"
                 variants={{
                   hidden: { opacity: 0, y: 20 },
@@ -61,12 +78,21 @@ export function BarTimelineSlide({ slide }: { slide: Slide }) {
                 }}
               >
                 <motion.div
-                  className="w-full rounded-t-xl bg-gradient-to-t from-indigo-400 to-sky-300 shadow-[0_8px_32px_rgba(56,189,248,0.6)]"
-                  initial={{ height: 0 }}
-                  animate={{ height: `${height}%` }}
-                  transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
+                  className="text-[9px] text-slate-300/90 font-medium mb-1"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 + idx * 0.05 }}
+                >
+                  {m.views > 0 ? formatValue(m.views) : ""}
+                </motion.div>
+                <motion.div
+                  className="w-full rounded-t-lg bg-gradient-to-t from-indigo-500 to-sky-400 shadow-[0_4px_20px_rgba(56,189,248,0.4)] min-h-[4px]"
+                  style={{ height: `${height}%` }}
+                  initial={{ scaleY: 0 }}
+                  animate={{ scaleY: 1 }}
+                  transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1], delay: idx * 0.05 }}
                 />
-                <div className="text-[10px] text-slate-200/80">{m.month}</div>
+                <div className="text-[11px] text-slate-200/80 mt-1">{m.month}</div>
               </motion.div>
             );
           })}

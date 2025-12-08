@@ -6,13 +6,26 @@ import type { Slide } from "../../../lib/wrapSlides";
 type Region = { name: string; sales: number; orders: number };
 
 export function GeoHotspotsSlide({ slide }: { slide: Slide }) {
-  const { topRegion, topRegionSales, regions } = slide.payload as {
+  const { topRegion, topRegionSales, regions, currencyCode } = slide.payload as {
     topRegion: string;
     topRegionSales: number;
     regions: Region[];
+    currencyCode?: string | null;
   };
 
   const maxSales = Math.max(...regions.map((r) => r.sales));
+
+  // Get currency symbol
+  const getCurrencySymbol = (code: string) => {
+    try {
+      return new Intl.NumberFormat("en", { style: "currency", currency: code })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value || code;
+    } catch {
+      return code;
+    }
+  };
+  const currencySymbol = getCurrencySymbol(currencyCode || "USD");
 
   return (
     <div className="relative flex h-full w-full flex-col justify-start px-12 py-8">
@@ -63,7 +76,7 @@ export function GeoHotspotsSlide({ slide }: { slide: Slide }) {
                 </div>
                 <div className="w-28 text-right">
                   <span className="text-sm font-semibold text-white">
-                    ${(region.sales / 1000).toFixed(0)}K
+                    {currencySymbol}{(region.sales / 1000).toFixed(0)}K
                   </span>
                   <span className="text-xs text-slate-400 ml-2">
                     {region.orders.toLocaleString()} orders
@@ -81,7 +94,7 @@ export function GeoHotspotsSlide({ slide }: { slide: Slide }) {
           transition={{ delay: 1 }}
         >
           <span className="text-xs text-slate-400">
-            Top market: <span className="text-emerald-400 font-semibold">{topRegion}</span> with ${(topRegionSales / 1000000).toFixed(2)}M in sales
+            Top market: <span className="text-emerald-400 font-semibold">{topRegion}</span> with {currencySymbol}{(topRegionSales / 1000000).toFixed(2)}M in sales
           </span>
         </motion.div>
       </div>

@@ -6,16 +6,29 @@ import type { Slide } from "../../../lib/wrapSlides";
 type DailyData = { date: string; revenue: number };
 
 export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
-  const { peakDay, peakDate, peakRevenue, averageDayRevenue, multiplier, dailyData } = slide.payload as {
+  const { peakDay, peakDate, peakRevenue, averageDayRevenue, multiplier, dailyData, currencyCode } = slide.payload as {
     peakDay: string;
     peakDate: string;
     peakRevenue: number;
     averageDayRevenue: number;
     multiplier: number;
     dailyData: DailyData[];
+    currencyCode?: string | null;
   };
 
   const maxRevenue = Math.max(...dailyData.map((d) => d.revenue));
+
+  // Get currency symbol
+  const getCurrencySymbol = (code: string) => {
+    try {
+      return new Intl.NumberFormat("en", { style: "currency", currency: code })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value || code;
+    } catch {
+      return code;
+    }
+  };
+  const currencySymbol = getCurrencySymbol(currencyCode || "USD");
 
   return (
     <div className="relative flex h-full w-full flex-col justify-start px-12 py-8">
@@ -79,7 +92,7 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
           transition={{ delay: 1 }}
         >
           <div className="text-center">
-            <div className="text-3xl font-bold text-orange-400">${(peakRevenue / 1000).toFixed(0)}K</div>
+            <div className="text-3xl font-bold text-orange-400">{currencySymbol}{(peakRevenue / 1000).toFixed(0)}K</div>
             <div className="text-xs text-slate-400">{peakDay}</div>
           </div>
           <div className="h-12 w-px bg-white/20" />
@@ -89,7 +102,7 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
           </div>
           <div className="h-12 w-px bg-white/20" />
           <div className="text-center">
-            <div className="text-3xl font-bold text-slate-400">${(averageDayRevenue / 1000).toFixed(1)}K</div>
+            <div className="text-3xl font-bold text-slate-400">{currencySymbol}{(averageDayRevenue / 1000).toFixed(1)}K</div>
             <div className="text-xs text-slate-400">daily average</div>
           </div>
         </motion.div>
