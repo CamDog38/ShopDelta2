@@ -39,7 +39,7 @@ export function CustomerLoyaltySlide({ slide }: { slide: Slide }) {
   const newDash = (newRevPercent / 100) * circumference;
 
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center px-12">
+    <div className="relative flex h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-4 sm:py-0">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_30%_70%,rgba(236,72,153,0.5),transparent_55%),radial-gradient(circle_at_70%_30%,rgba(34,211,238,0.4),transparent_55%)]"
         initial={{ opacity: 0 }}
@@ -47,22 +47,22 @@ export function CustomerLoyaltySlide({ slide }: { slide: Slide }) {
         transition={{ duration: 1 }}
       />
 
-      <div className="relative z-10 flex flex-col items-center gap-6">
+      <div className="relative z-10 flex flex-col items-center gap-3 sm:gap-6">
         <motion.div
           className="text-center"
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-2xl font-semibold tracking-tight">{slide.title}</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{slide.title}</h2>
           {slide.subtitle && (
-            <p className="mt-1 text-sm text-slate-200/80">{slide.subtitle}</p>
+            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-slate-200/80">{slide.subtitle}</p>
           )}
         </motion.div>
 
-        <div className="flex items-center gap-12">
+        <div className="flex items-center gap-4 sm:gap-12">
           {/* Donut Chart */}
-          <div className="relative w-48 h-48">
+          <div className="relative w-28 h-28 sm:w-48 sm:h-48">
             <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
               {/* Background circle */}
               <circle
@@ -116,47 +116,47 @@ export function CustomerLoyaltySlide({ slide }: { slide: Slide }) {
             {/* Center text */}
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <motion.span
-                className="text-3xl font-bold text-white"
+                className="text-xl sm:text-3xl font-bold text-white"
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.8 }}
               >
                 {returningRevenuePercent}%
               </motion.span>
-              <span className="text-xs text-slate-300">returning revenue</span>
+              <span className="text-[10px] sm:text-xs text-slate-300">returning revenue</span>
             </div>
           </div>
 
           {/* Legend */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 sm:gap-4">
             <motion.div
-              className="flex items-center gap-3"
+              className="flex items-center gap-2 sm:gap-3"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6 }}
             >
-              <div className="w-4 h-4 rounded-full bg-gradient-to-r from-pink-500 to-pink-400" />
+              <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-gradient-to-r from-pink-500 to-pink-400 shrink-0" />
               <div>
-                <div className="text-sm font-semibold text-white">
+                <div className="text-xs sm:text-sm font-semibold text-white">
                   {returningCustomers.toLocaleString()} Returning
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-[10px] sm:text-xs text-slate-400">
                   {currencySymbol}{(returningRevenue / 1000000).toFixed(2)}M revenue
                 </div>
               </div>
             </motion.div>
             <motion.div
-              className="flex items-center gap-3"
+              className="flex items-center gap-2 sm:gap-3"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.8 }}
             >
-              <div className="w-4 h-4 rounded-full bg-gradient-to-r from-cyan-400 to-cyan-300" />
+              <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-gradient-to-r from-cyan-400 to-cyan-300 shrink-0" />
               <div>
-                <div className="text-sm font-semibold text-white">
+                <div className="text-xs sm:text-sm font-semibold text-white">
                   {newCustomers.toLocaleString()} New
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-[10px] sm:text-xs text-slate-400">
                   {currencySymbol}{(newRevenue / 1000000).toFixed(2)}M revenue
                 </div>
               </div>

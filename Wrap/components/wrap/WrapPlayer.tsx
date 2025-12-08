@@ -246,11 +246,14 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
     );
   }
 
-  // Share mode: Full screen, no black edges, fills entire viewport
+  // Share mode: Full screen with dynamic viewport height to handle mobile browser chrome
   return (
-    <div className="fixed inset-0 w-screen h-screen bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 text-white overflow-hidden">
-      {/* Progress bar - overlaid at top */}
-      <div className="absolute top-2 left-3 right-3 flex gap-0.5 z-20">
+    <div 
+      className="fixed inset-0 bg-gradient-to-br from-indigo-500/40 via-slate-900/80 to-fuchsia-500/40 text-white overflow-hidden"
+      style={{ height: '100dvh', width: '100vw' }}
+    >
+      {/* Progress bar - overlaid at top, safe area aware */}
+      <div className="absolute top-[env(safe-area-inset-top,8px)] left-3 right-3 flex gap-0.5 z-20 pt-1">
         {slides.map((s, i) => (
           <div
             key={s.id}
@@ -271,24 +274,29 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
         ))}
       </div>
 
-      {/* Main slide container - fills entire viewport */}
-      <div className="absolute inset-0 w-full h-full">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={slide.id}
-            initial={{ opacity: 0, x: 60, scale: 0.98 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -60, scale: 0.98 }}
-            transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
-            className="w-full h-full"
-          >
-            {renderSlide()}
-          </motion.div>
-        </AnimatePresence>
+      {/* Main slide container - uses flex to scale content */}
+      <div className="absolute inset-0 flex flex-col pt-6 pb-10">
+        <div className="flex-1 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={slide.id}
+              initial={{ opacity: 0, x: 60, scale: 0.98 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -60, scale: 0.98 }}
+              transition={{ duration: 0.7, ease: [0.25, 0.8, 0.25, 1] }}
+              className="w-full h-full overflow-auto"
+            >
+              {renderSlide()}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* Navigation controls - overlaid at bottom right */}
-      <div className="absolute bottom-2 right-3 flex items-center gap-2 text-xs text-white/70 z-20">
+      {/* Navigation controls - safe area aware at bottom */}
+      <div 
+        className="absolute right-3 flex items-center gap-2 text-xs text-white/70 z-20"
+        style={{ bottom: 'max(env(safe-area-inset-bottom, 8px), 8px)' }}
+      >
         <button
           onClick={goPrev}
           className="px-2.5 py-1 rounded-full border border-white/30 bg-black/40 hover:bg-white/20 transition backdrop-blur-sm"

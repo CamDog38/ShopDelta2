@@ -56,7 +56,7 @@ export function AovGrowthSlide({ slide }: { slide: Slide }) {
   const isPositive = growthPercent >= 0;
 
   return (
-    <div className="relative flex h-full w-full flex-col justify-start px-10 py-8">
+    <div className="relative flex h-full w-full flex-col justify-start px-4 sm:px-10 py-4 sm:py-8">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_80%_80%,rgba(16,185,129,0.5),transparent_55%)]"
         initial={{ opacity: 0 }}
@@ -64,31 +64,31 @@ export function AovGrowthSlide({ slide }: { slide: Slide }) {
         transition={{ duration: 1 }}
       />
 
-      <div className="relative z-10 flex h-full flex-col gap-4">
+      <div className="relative z-10 flex h-full flex-col gap-2 sm:gap-4">
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-2xl font-semibold tracking-tight">{slide.title}</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{slide.title}</h2>
           {slide.subtitle && (
-            <p className="mt-1 text-sm text-slate-200/80">{slide.subtitle}</p>
+            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-slate-200/80">{slide.subtitle}</p>
           )}
         </motion.div>
 
         {/* Big numbers */}
         <motion.div
-          className="flex items-center justify-center gap-8"
+          className="flex items-center justify-center gap-3 sm:gap-8 flex-wrap"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
           <div className="text-center">
-            <div className="text-4xl font-bold text-slate-400">{currencySymbol}{startAov}</div>
-            <div className="text-xs text-slate-500">{yearA || 2024} AOV</div>
+            <div className="text-2xl sm:text-4xl font-bold text-slate-400">{currencySymbol}{startAov}</div>
+            <div className="text-[10px] sm:text-xs text-slate-500">{yearA || 2024} AOV</div>
           </div>
           <motion.div
-            className={`text-2xl ${isPositive ? "text-emerald-400" : "text-rose-400"}`}
+            className={`text-xl sm:text-2xl ${isPositive ? "text-emerald-400" : "text-rose-400"}`}
             initial={{ opacity: 0, scale: 0 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.6 }}
@@ -96,22 +96,22 @@ export function AovGrowthSlide({ slide }: { slide: Slide }) {
             →
           </motion.div>
           <div className="text-center">
-            <div className={`text-4xl font-bold ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>{currencySymbol}{endAov}</div>
-            <div className="text-xs text-slate-500">{yearB || 2025} AOV</div>
+            <div className={`text-2xl sm:text-4xl font-bold ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>{currencySymbol}{endAov}</div>
+            <div className="text-[10px] sm:text-xs text-slate-500">{yearB || 2025} AOV</div>
           </div>
           <motion.div
-            className={`ml-4 px-3 py-1 rounded-full ${isPositive ? "bg-emerald-500/20 border border-emerald-500/30" : "bg-rose-500/20 border border-rose-500/30"}`}
+            className={`ml-2 sm:ml-4 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full ${isPositive ? "bg-emerald-500/20 border border-emerald-500/30" : "bg-rose-500/20 border border-rose-500/30"}`}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.8 }}
           >
-            <span className={`font-bold ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>{isPositive ? "+" : ""}{growthPercent}%</span>
+            <span className={`text-sm sm:text-base font-bold ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>{isPositive ? "+" : ""}{growthPercent}%</span>
           </motion.div>
         </motion.div>
 
         {/* Line chart */}
-        <div className="flex-1 flex items-center justify-center">
-          <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full max-w-2xl h-48">
+        <div className="flex-1 flex items-center justify-center min-h-0">
+          <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full max-w-2xl h-32 sm:h-48">
             {/* Grid lines */}
             {[0, 1, 2, 3, 4].map((i) => (
               <line

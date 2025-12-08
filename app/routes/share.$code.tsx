@@ -1,4 +1,4 @@
-import { json, type LoaderFunctionArgs, type ActionFunctionArgs, type LinksFunction } from "@remix-run/node";
+import { json, type LoaderFunctionArgs, type ActionFunctionArgs, type LinksFunction, type MetaFunction } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
 import { useState, useEffect } from "react";
 import db from "../db.server";
@@ -10,6 +10,14 @@ import wrapStylesUrl from "../../Wrap/globals.css?url";
 // Export links for the CSS
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: wrapStylesUrl },
+];
+
+// Meta tags for proper mobile viewport handling
+export const meta: MetaFunction = () => [
+  { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" },
+  { name: "apple-mobile-web-app-capable", content: "yes" },
+  { name: "mobile-web-app-capable", content: "yes" },
+  { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
 ];
 
 // Hash password for comparison

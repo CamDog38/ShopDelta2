@@ -25,7 +25,7 @@ export function TopCustomerSlide({ slide }: { slide: Slide }) {
   const currencySymbol = getCurrencySymbol(currencyCode || "USD");
 
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center px-12">
+    <div className="relative flex h-full w-full flex-col items-center justify-center px-4 sm:px-12 py-4 sm:py-0">
       <motion.div
         className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_50%_30%,rgba(251,191,36,0.5),transparent_55%),radial-gradient(circle_at_50%_70%,rgba(249,115,22,0.4),transparent_55%)]"
         initial={{ opacity: 0 }}
@@ -33,16 +33,16 @@ export function TopCustomerSlide({ slide }: { slide: Slide }) {
         transition={{ duration: 1 }}
       />
 
-      <div className="relative z-10 flex flex-col items-center gap-8">
+      <div className="relative z-10 flex flex-col items-center gap-3 sm:gap-8">
         <motion.div
           className="text-center"
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-2xl font-semibold tracking-tight">{slide.title}</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{slide.title}</h2>
           {slide.subtitle && (
-            <p className="mt-1 text-sm text-slate-200/80">{slide.subtitle}</p>
+            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-slate-200/80">{slide.subtitle}</p>
           )}
         </motion.div>
 
@@ -53,9 +53,9 @@ export function TopCustomerSlide({ slide }: { slide: Slide }) {
           animate={{ opacity: 1, scale: 1, rotate: 0 }}
           transition={{ duration: 0.7, delay: 0.2, type: "spring" }}
         >
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-[0_0_40px_rgba(251,191,36,0.4)]">
+          <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-[0_0_40px_rgba(251,191,36,0.4)]">
             <svg
-              className="w-12 h-12 text-white"
+              className="w-8 h-8 sm:w-12 sm:h-12 text-white"
               fill="currentColor"
               viewBox="0 0 24 24"
             >
@@ -63,7 +63,7 @@ export function TopCustomerSlide({ slide }: { slide: Slide }) {
             </svg>
           </div>
           <motion.div
-            className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs font-bold"
+            className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px] sm:text-xs font-bold"
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.8, type: "spring" }}
@@ -79,32 +79,32 @@ export function TopCustomerSlide({ slide }: { slide: Slide }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
         >
-          <div className="text-6xl font-bold text-amber-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.4)]">
+          <div className="text-4xl sm:text-6xl font-bold text-amber-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.4)]">
             {orderCount}
           </div>
-          <div className="text-sm text-slate-300">orders this year</div>
+          <div className="text-xs sm:text-sm text-slate-300">orders this year</div>
         </motion.div>
 
         {/* Stats grid */}
         <motion.div
-          className="grid grid-cols-3 gap-8"
+          className="grid grid-cols-3 gap-3 sm:gap-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
         >
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">
+            <div className="text-base sm:text-2xl font-bold text-white">
               {currencySymbol}{totalSpent.toLocaleString()}
             </div>
-            <div className="text-xs text-slate-400">Total Spent</div>
+            <div className="text-[10px] sm:text-xs text-slate-400">Total Spent</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">{memberSince}</div>
-            <div className="text-xs text-slate-400">Member Since</div>
+            <div className="text-base sm:text-2xl font-bold text-white">{memberSince}</div>
+            <div className="text-[10px] sm:text-xs text-slate-400">Member Since</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-white">{favoriteCategory}</div>
-            <div className="text-xs text-slate-400">Favorite Category</div>
+            <div className="text-base sm:text-2xl font-bold text-white truncate max-w-[80px] sm:max-w-none">{favoriteCategory}</div>
+            <div className="text-[10px] sm:text-xs text-slate-400">Fav Category</div>
           </div>
         </motion.div>
       </div>
