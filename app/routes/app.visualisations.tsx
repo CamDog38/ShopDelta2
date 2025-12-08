@@ -1,4 +1,4 @@
-import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
+import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { useState } from "react";
@@ -10,9 +10,6 @@ import {
   computeYoYAnnualAggregate,
   computeYoYAnnualProduct,
 } from "../analytics.yoy.server";
-import wrapStylesUrl from "../../Wrap/globals.css?url";
-import { WrapPlayer } from "../../Wrap/components/wrap/WrapPlayer";
-import { buildSlides } from "../../Wrap/lib/wrapSlides";
 import {
   AreaChart,
   Area,
@@ -26,10 +23,6 @@ import {
   ReferenceLine,
   LabelList,
 } from "recharts";
-
-export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: wrapStylesUrl },
-];
 
 // Loader: reuse existing analytics helpers but focus on story data
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -99,30 +92,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function VisualisationsPage() {
   const data = useLoaderData<typeof loader>();
   const { yearA, yearB, ytd, annualYoY, annualProducts, seriesMonth, shopName, currencyCode } = data as any;
-
-  const wrapSlides = buildSlides({
-    yearA,
-    yearB,
-    isYtd: ytd,
-    totalSalesCurr: annualYoY?.comparison?.current?.sales ?? 0,
-    totalSalesPrev: annualYoY?.comparison?.previous?.sales ?? 0,
-    totalQtyCurr: annualYoY?.comparison?.current?.qty ?? 0,
-    totalQtyPrev: annualYoY?.comparison?.previous?.qty ?? 0,
-    salesDeltaPct: annualYoY?.comparison?.deltas?.salesPct ?? 0,
-    qtyDeltaPct: annualYoY?.comparison?.deltas?.qtyPct ?? 0,
-    monthly: seriesMonth || [],
-    products: (annualProducts?.table || []) as Array<{
-      product: string;
-      salesCurr: number;
-      salesPrev: number;
-      qtyCurr: number;
-      qtyPrev: number;
-      salesDelta: number;
-      salesDeltaPct: number | null;
-    }>,
-    shopName,
-    currencyCode,
-  });
 
   const [metric, setMetric] = useState<"sales" | "qty">("sales");
 
@@ -733,21 +702,6 @@ export default function VisualisationsPage() {
           </BlockStack>
         </Card>
 
-        <Card>
-          <BlockStack gap="300">
-            <div>
-              <Text as="h2" variant="headingMd">
-                Year in review (prototype)
-              </Text>
-              <Text as="p" variant="bodySm" tone="subdued">
-                Instagram-style wrap experience based on sample data.
-              </Text>
-            </div>
-            <div style={{ borderRadius: 24, overflow: "hidden" }}>
-              <WrapPlayer slides={wrapSlides} />
-            </div>
-          </BlockStack>
-        </Card>
       </BlockStack>
     </Page>
   );
