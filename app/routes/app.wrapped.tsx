@@ -29,6 +29,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const ytdParam = url.searchParams.get("ytd");
   const modeParam = url.searchParams.get("mode");
   const monthParam = url.searchParams.get("month");
+  const compareParam = url.searchParams.get("compare");
 
   const mode: "year" | "month" = modeParam === "year" ? "year" : "month";
 
@@ -47,12 +48,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Normalize comparison period
   const currYear = yearB;
   const currMonth = month;
-  const prevYear = mode === "month" ? currYear - 1 : (yearAParam ? parseInt(yearAParam, 10) : currYear - 1);
-  const prevMonth = mode === "month" ? (currMonth === 1 ? 12 : currMonth - 1) : currMonth;
+  const compareMode: "yoy" | "prev" = compareParam === "prev" ? "prev" : "yoy";
+  const prevYear =
+    mode === "month"
+      ? (compareMode === "yoy" ? currYear - 1 : (currMonth === 1 ? currYear - 1 : currYear))
+      : (yearAParam ? parseInt(yearAParam, 10) : currYear - 1);
+  const prevMonth =
+    mode === "month"
+      ? (compareMode === "yoy" ? currMonth : (currMonth === 1 ? 12 : currMonth - 1))
+      : currMonth;
 
   const cacheKey = generateCacheKey("wrapped", {
     shop: session.shop,
     mode,
+    compareMode: mode === "month" ? compareMode : "",
     currYear,
     currMonth,
     prevYear,
@@ -504,9 +513,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const payload = {
     mode,
+    compareMode,
     yearA: yearAOut,
     yearB: yearBOut,
     month: currMonth,
+    compareMonth: prevMonth,
     ytd,
     wrapYoY,
     wrapProducts,
@@ -537,9 +548,11 @@ export default function WrappedPage() {
   const data = useLoaderData<typeof loader>();
   const {
     mode,
+    compareMode,
     yearA,
     yearB,
     month,
+    compareMonth,
     ytd,
     wrapYoY,
     wrapProducts,
@@ -568,11 +581,13 @@ export default function WrappedPage() {
 
   const [pendingMonth, setPendingMonth] = useState<number>(month as number);
   const [pendingYearB, setPendingYearB] = useState<number>(yearB as number);
+  const [pendingCompareMode, setPendingCompareMode] = useState<"yoy" | "prev">((compareMode as any) === "prev" ? "prev" : "yoy");
 
   useEffect(() => {
     setPendingMonth(month as number);
     setPendingYearB(yearB as number);
-  }, [month, yearB]);
+    setPendingCompareMode((compareMode as any) === "prev" ? "prev" : "yoy");
+  }, [month, yearB, compareMode]);
 
   // Fetch shares when opening the manager
   const handleOpenShareManager = () => {
@@ -586,8 +601,8 @@ export default function WrappedPage() {
     { month: "long" },
   );
 
-  const compareMonth = mode === "month" ? (selectedMonth === 1 ? 12 : selectedMonth - 1) : selectedMonth;
-  const compareMonthName = new Date(Date.UTC(yearA, compareMonth - 1, 1)).toLocaleString(
+  const compareMonthNum = (mode === "month" ? (compareMonth as number) : selectedMonth) as number;
+  const compareMonthName = new Date(Date.UTC(yearA, compareMonthNum - 1, 1)).toLocaleString(
     "en-US",
     { month: "long" },
   );
@@ -607,13 +622,16 @@ export default function WrappedPage() {
     setPendingYearB(y);
   };
 
-  const isDirty = mode === "month" && (pendingMonth !== selectedMonth || pendingYearB !== yearB);
+  const isDirty =
+    mode === "month" &&
+    (pendingMonth !== selectedMonth || pendingYearB !== yearB || pendingCompareMode !== ((compareMode as any) === "prev" ? "prev" : "yoy"));
 
   const handleGenerate = () => {
     const params = new URLSearchParams();
     params.set("mode", "month");
     params.set("yearB", String(pendingYearB));
     params.set("month", String(pendingMonth));
+    params.set("compare", pendingCompareMode);
     navigate(`?${params.toString()}`);
   };
 
@@ -745,6 +763,23 @@ export default function WrappedPage() {
                   </select>
 
                   <select
+                    value={pendingCompareMode}
+                    onChange={(e) => setPendingCompareMode(e.target.value === "prev" ? "prev" : "yoy")}
+                    style={{
+                      marginTop: 4,
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(148,163,184,0.6)",
+                      background: "rgba(15,23,42,0.7)",
+                      color: "white",
+                      fontSize: 13,
+                    }}
+                  >
+                    <option value="yoy">Same month last year</option>
+                    <option value="prev">Previous month</option>
+                  </select>
+
+                  <select
                     value={pendingYearB}
                     onChange={(e) => handleYearChange(e.target.value)}
                     style={{
@@ -782,7 +817,10 @@ export default function WrappedPage() {
               </div>
             )}
             <div style={{ borderRadius: 24, overflow: "hidden" }}>
-              <WrapPlayer slides={wrapSlides} />
+              <WrapPlayer
+                key={`${mode}:${yearB}:${selectedMonth}:${yearA}:${compareMode}:${compareMonthNum}`}
+                slides={wrapSlides}
+              />
             </div>
             
             {/* Share Button */}
