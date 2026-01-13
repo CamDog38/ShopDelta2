@@ -227,6 +227,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   } | null = null;
 
+  let dailySales: Array<{ day: number; salesCurr: number; salesPrev: number }> = [];
+
   try {
     // Fetch current period orders
     const searchCurr = `processed_at:>='${startDate.toISOString()}' processed_at:<='${endDate.toISOString()}'`;
@@ -245,6 +247,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const regionMap = new Map<string, { sales: number; orders: number }>();
     const provinceMap = new Map<string, { country: string; province: string; sales: number; orders: number }>();
     const hourMap = new Map<number, { sales: number; orders: number }>();
+    const daySalesCurrMap = new Map<number, number>();
+    const daySalesPrevMap = new Map<number, number>();
     let totalFulfillmentHours = 0;
     let fulfillmentCount = 0;
     let sameDayCount = 0;
@@ -347,6 +351,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
           const hb = hourMap.get(hour)!;
           hb.sales += orderTotal;
           hb.orders++;
+
+          if (mode === "month") {
+            const day = orderDate.getUTCDate();
+            daySalesCurrMap.set(day, (daySalesCurrMap.get(day) || 0) + orderTotal);
+          }
         }
 
         // Track fulfillment speed
@@ -385,7 +394,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       const res: Response = await admin.graphql(EXTENDED_QUERY, { variables: { first: 250, search: searchPrev, after } });
       const data = await res.json();
       const edges = (data as any)?.data?.orders?.edges ?? [];
-      totalOrdersPrev += edges.length;
+
+      for (const e of edges) {
+        totalOrdersPrev++;
+        const orderTotal = parseFloat(e?.node?.totalPriceSet?.shopMoney?.amount || "0");
+        const processedAt = e?.node?.processedAt;
+        if (mode === "month" && processedAt) {
+          const orderDate = new Date(processedAt);
+          const day = orderDate.getUTCDate();
+          daySalesPrevMap.set(day, (daySalesPrevMap.get(day) || 0) + orderTotal);
+        }
+      }
       
       const page = (data as any)?.data?.orders;
       if (page?.pageInfo?.hasNextPage && edges.length) {
@@ -393,6 +412,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       } else {
         break;
       }
+    }
+
+    if (mode === "month") {
+      const daysCurr = new Date(Date.UTC(currYear, currMonth, 0)).getUTCDate();
+      const daysPrev = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+      const days = Math.max(daysCurr, daysPrev);
+      dailySales = Array.from({ length: days }).map((_, idx) => {
+        const day = idx + 1;
+        return {
+          day,
+          salesCurr: daySalesCurrMap.get(day) || 0,
+          salesPrev: daySalesPrevMap.get(day) || 0,
+        };
+      });
     }
 
     // Calculate new vs returning customers based on order count in this period
@@ -543,6 +576,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     hourlyBreakdown,
     fulfillmentStats,
     clvStats,
+    dailySales,
   };
 
   cache.set(cacheKey, payload, CACHE_TTL.SHORT);
@@ -578,6 +612,7 @@ export default function WrappedPage() {
     hourlyBreakdown,
     fulfillmentStats,
     clvStats,
+    dailySales,
   } = data as any;
   const navigate = useNavigate();
   const navigation = useNavigation();
@@ -700,6 +735,7 @@ export default function WrappedPage() {
     hourlyBreakdown,
     fulfillmentStats,
     clvStats,
+    dailySales,
   });
 
   return (

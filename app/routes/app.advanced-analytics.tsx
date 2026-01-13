@@ -13,9 +13,8 @@ export default function AdvancedAnalyticsLayout() {
   const navigate = useNavigate();
 
   const isCampaign = location.pathname.includes("/app/advanced-analytics/campaign");
-  const isVisualisations = location.pathname.includes("/app/advanced-analytics/visualisations");
 
-  const selected = isVisualisations ? 2 : isCampaign ? 1 : 0;
+  const selected = isCampaign ? 1 : 0;
 
   const tabs = [
     {
@@ -29,12 +28,6 @@ export default function AdvancedAnalyticsLayout() {
       content: "Campaign Analytics",
       accessibilityLabel: "Campaign Analytics",
       panelID: "campaign-analytics-panel",
-    },
-    {
-      id: "visualisations",
-      content: "Visualisations",
-      accessibilityLabel: "Visualisations",
-      panelID: "visualisations-panel",
     },
   ];
 
@@ -54,7 +47,6 @@ export default function AdvancedAnalyticsLayout() {
           onSelect={(idx) => {
             if (idx === 0) navigate("/app/advanced-analytics/analytics");
             if (idx === 1) navigate("/app/advanced-analytics/campaign");
-            if (idx === 2) navigate("/app/advanced-analytics/visualisations");
           }}
         />
       </div>

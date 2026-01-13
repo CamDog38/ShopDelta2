@@ -13,6 +13,8 @@ export type SlideType =
   | "cartRecovery"
   | "seasonalPeak"
   | "aovGrowth"
+  | "aovDrivers"
+  | "dailySalesCompare"
   | "topCustomer"
   | "fastestSelling"
   | "reviews"
@@ -53,6 +55,7 @@ export type WrapAnalyticsInput = {
     salesPrev: number;
     salesDelta: number;
   }>;
+  dailySales?: Array<{ day: number; salesCurr: number; salesPrev: number }>;
   products: Array<{
     product: string;
     salesCurr: number;
@@ -118,6 +121,7 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
     salesDeltaPct,
     qtyDeltaPct,
     monthly,
+    dailySales,
     products,
     shopName,
     currencyCode,
@@ -258,55 +262,53 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
     });
   }
 
-  // AOV Growth slide - calculate from sales and orders
-  if (totalOrdersCurr && totalOrdersPrev && monthly.length > 0) {
-    const aovCurr = totalOrdersCurr > 0 ? totalSalesCurr / totalOrdersCurr : 0;
-    const aovPrev = totalOrdersPrev > 0 ? totalSalesPrev / totalOrdersPrev : 0;
-    const aovGrowthPct = aovPrev > 0 ? ((aovCurr - aovPrev) / aovPrev) * 100 : 0;
+  // AOV Drivers slide
+  if (totalOrdersCurr && totalOrdersPrev) {
+    const itemsPerOrderCurr = totalOrdersCurr > 0 ? totalQtyCurr / totalOrdersCurr : 0;
+    const itemsPerOrderPrev = totalOrdersPrev > 0 ? totalQtyPrev / totalOrdersPrev : 0;
 
-    // Build monthly AOV data - estimate orders per month proportionally to sales
-    // This creates variation in the graph based on actual monthly sales patterns
-    const totalMonthlySales = monthly.reduce((sum, m) => sum + m.salesCurr, 0);
-    const monthlyAov = monthly.map((m) => {
-      const monthMatch = m.period.match(/^(\w+)/);
-      const monthName = monthMatch ? monthMatch[1] : m.period.slice(0, 3);
-      // Estimate monthly orders based on proportion of sales
-      const monthlyOrdersEstimate = totalMonthlySales > 0 
-        ? Math.round((m.salesCurr / totalMonthlySales) * totalOrdersCurr)
-        : Math.round(totalOrdersCurr / 12);
-      // Calculate estimated AOV for this month
-      const monthAov = monthlyOrdersEstimate > 0 
-        ? Math.round(m.salesCurr / monthlyOrdersEstimate) 
-        : Math.round(aovCurr);
-      return { month: monthName, aov: monthAov };
-    });
+    const avgSellingPriceCurr = totalQtyCurr > 0 ? totalSalesCurr / totalQtyCurr : 0;
+    const avgSellingPricePrev = totalQtyPrev > 0 ? totalSalesPrev / totalQtyPrev : 0;
 
     slides.push({
-      id: "aov-growth",
-      type: "aovGrowth",
-      title: "Average Order Value",
-      subtitle: `Your customers are spending ${aovGrowthPct >= 0 ? "more" : "less"} per order.`,
+      id: "aov-drivers",
+      type: "aovDrivers",
+      title: "Average Order Value Drivers",
+      subtitle: "What changed: basket size vs price per item.",
       payload: {
-        startAov: Math.round(aovPrev),
-        endAov: Math.round(aovCurr),
-        growthPercent: Number(aovGrowthPct.toFixed(1)),
-        monthlyAov,
+        periodLabel: effectivePeriodLabel,
+        compareLabel: effectiveCompareLabel,
+        itemsPerOrderCurr,
+        itemsPerOrderPrev,
+        avgSellingPriceCurr,
+        avgSellingPricePrev,
         currencyCode,
-        yearA,
-        yearB,
       },
     });
   }
 
-  // Bar Timeline slide - monthly sales visualization
-  if (monthly.length > 0) {
+  // Period-vs-period daily sales (month mode) OR monthly bars (year mode)
+  if (wrapMode === "month" && dailySales && dailySales.length > 0) {
+    slides.push({
+      id: "daily-sales-compare",
+      type: "dailySalesCompare",
+      title: "Daily Sales",
+      subtitle: `How ${effectivePeriodLabel} compared to ${effectiveCompareLabel}, day by day.`,
+      payload: {
+        periodLabel: effectivePeriodLabel,
+        compareLabel: effectiveCompareLabel,
+        dailySales,
+        currencyCode,
+      },
+    });
+  } else if (monthly.length > 0) {
     const barMonths = monthly.map((m) => {
       const monthMatch = m.period.match(/^(\w+)/);
       const monthName = monthMatch ? monthMatch[1] : m.period.slice(0, 3);
       return {
         month: monthName,
-        posts: 0, // Not applicable for e-commerce
-        views: Math.round(m.salesCurr), // Use sales as the metric
+        posts: 0,
+        views: Math.round(m.salesCurr),
       };
     });
 
@@ -319,8 +321,43 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
     });
   }
 
-  // Seasonal Peak slide - find the best performing month
-  if (monthly.length > 0) {
+  // Seasonal Peak slide
+  if (wrapMode === "month" && dailySales && dailySales.length > 0) {
+    const peakCurr = dailySales.reduce(
+      (max, d) => (d.salesCurr > max.salesCurr ? d : max),
+      dailySales[0],
+    );
+    const peakPrev = dailySales.reduce(
+      (max, d) => (d.salesPrev > max.salesPrev ? d : max),
+      dailySales[0],
+    );
+    const avgCurr = totalSalesCurr / Math.max(1, dailySales.length);
+    const multiplier = avgCurr > 0 ? peakCurr.salesCurr / avgCurr : 1;
+
+    const dailyData = dailySales.map((d) => ({
+      date: `${d.day}`,
+      revenue: d.salesCurr,
+    }));
+
+    slides.push({
+      id: "seasonal-peak",
+      type: "seasonalPeak",
+      title: "Your Peak Day",
+      subtitle: `Best day this period vs ${effectiveCompareLabel}.`,
+      payload: {
+        peakDay: `Day ${peakCurr.day}`,
+        peakDate: `${peakCurr.day}`,
+        peakRevenue: peakCurr.salesCurr,
+        averageDayRevenue: avgCurr,
+        multiplier: Number(multiplier.toFixed(1)),
+        dailyData,
+        currencyCode,
+        comparePeakDay: `Day ${peakPrev.day}`,
+        comparePeakRevenue: peakPrev.salesPrev,
+        compareLabel: effectiveCompareLabel,
+      },
+    });
+  } else if (monthly.length > 0) {
     const sortedByRevenue = [...monthly].sort((a, b) => b.salesCurr - a.salesCurr);
     const peakMonth = sortedByRevenue[0];
     const avgMonthRevenue = totalSalesCurr / Math.max(1, monthly.length);
@@ -329,7 +366,6 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
     const monthMatch = peakMonth.period.match(/^(\w+)/);
     const peakMonthName = monthMatch ? monthMatch[1] : "Peak";
 
-    // Build daily-like data from monthly for visualization
     const dailyData = monthly.map((m) => {
       const mm = m.period.match(/^(\w+)/);
       return {

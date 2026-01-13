@@ -6,7 +6,18 @@ import type { Slide } from "../../../lib/wrapSlides";
 type DailyData = { date: string; revenue: number };
 
 export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
-  const { peakDay, peakDate, peakRevenue, averageDayRevenue, multiplier, dailyData, currencyCode } = slide.payload as {
+  const {
+    peakDay,
+    peakDate,
+    peakRevenue,
+    averageDayRevenue,
+    multiplier,
+    dailyData,
+    currencyCode,
+    comparePeakDay,
+    comparePeakRevenue,
+    compareLabel,
+  } = slide.payload as {
     peakDay: string;
     peakDate: string;
     peakRevenue: number;
@@ -14,6 +25,9 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
     multiplier: number;
     dailyData: DailyData[];
     currencyCode?: string | null;
+    comparePeakDay?: string;
+    comparePeakRevenue?: number;
+    compareLabel?: string;
   };
 
   const maxRevenue = Math.max(...dailyData.map((d) => d.revenue));
@@ -101,10 +115,17 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
             <div className="text-[10px] sm:text-xs text-slate-400">vs avg</div>
           </div>
           <div className="h-8 sm:h-12 w-px bg-white/20" />
-          <div className="text-center">
-            <div className="text-lg sm:text-3xl font-bold text-slate-400">{currencySymbol}{(averageDayRevenue / 1000).toFixed(1)}K</div>
-            <div className="text-[10px] sm:text-xs text-slate-400">avg</div>
-          </div>
+          {typeof comparePeakRevenue === "number" && comparePeakDay && compareLabel ? (
+            <div className="text-center">
+              <div className="text-lg sm:text-3xl font-bold text-slate-300">{currencySymbol}{(comparePeakRevenue / 1000).toFixed(0)}K</div>
+              <div className="text-[10px] sm:text-xs text-slate-400">{compareLabel} {comparePeakDay}</div>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="text-lg sm:text-3xl font-bold text-slate-400">{currencySymbol}{(averageDayRevenue / 1000).toFixed(1)}K</div>
+              <div className="text-[10px] sm:text-xs text-slate-400">avg</div>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

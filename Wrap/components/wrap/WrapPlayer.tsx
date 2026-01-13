@@ -16,6 +16,8 @@ import { CustomerLoyaltySlide } from "./slides/CustomerLoyaltySlide";
 import { CartRecoverySlide } from "./slides/CartRecoverySlide";
 import { SeasonalPeakSlide } from "./slides/SeasonalPeakSlide";
 import { AovGrowthSlide } from "./slides/AovGrowthSlide";
+import { AovDriversSlide } from "./slides/AovDriversSlide";
+import { DailySalesCompareSlide } from "./slides/DailySalesCompareSlide";
 import { TopCustomerSlide } from "./slides/TopCustomerSlide";
 import { FastestSellingSlide } from "./slides/FastestSellingSlide";
 import { ReviewsSlide } from "./slides/ReviewsSlide";
@@ -101,6 +103,10 @@ export function WrapPlayer({ slides, autoAdvanceMs = 6500, isShareMode = false }
         return <SeasonalPeakSlide slide={slide} />;
       case "aovGrowth":
         return <AovGrowthSlide slide={slide} />;
+      case "aovDrivers":
+        return <AovDriversSlide slide={slide} />;
+      case "dailySalesCompare":
+        return <DailySalesCompareSlide slide={slide} />;
       case "topCustomer":
         return <TopCustomerSlide slide={slide} />;
       case "fastestSelling":
