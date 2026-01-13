@@ -29,7 +29,6 @@ export default function App() {
         </Link>
         <Link to="/app/wrapped">Wrapped</Link>
         <Link to="/app/advanced-analytics">Advanced Analytics</Link>
-        <Link to="/app/visualisations">Visualisations</Link>
         <Link to="/app/billing">Billing</Link>
       </NavMenu>
       <Outlet />

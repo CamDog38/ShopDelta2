@@ -1,9 +1,9 @@
 import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, useLoaderData, useNavigate, useFetcher } from "@remix-run/react";
+import { Link, useLoaderData, useNavigate, useFetcher, useNavigation } from "@remix-run/react";
 import { Page, BlockStack, Text, Card, InlineStack, Button } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { authenticate } from "../shopify.server";
 import type { YoYResult } from "../analytics.yoy.server";
 import {
@@ -562,8 +562,17 @@ export default function WrappedPage() {
     clvStats,
   } = data as any;
   const navigate = useNavigate();
+  const navigation = useNavigation();
   const sharesFetcher = useFetcher();
   const [showShareManager, setShowShareManager] = useState(false);
+
+  const [pendingMonth, setPendingMonth] = useState<number>(month as number);
+  const [pendingYearB, setPendingYearB] = useState<number>(yearB as number);
+
+  useEffect(() => {
+    setPendingMonth(month as number);
+    setPendingYearB(yearB as number);
+  }, [month, yearB]);
 
   // Fetch shares when opening the manager
   const handleOpenShareManager = () => {
@@ -589,20 +598,22 @@ export default function WrappedPage() {
   const handleMonthChange = (value: string) => {
     const m = parseInt(value, 10);
     if (!Number.isFinite(m)) return;
-    const params = new URLSearchParams();
-    params.set("mode", "month");
-    params.set("yearB", String(yearB));
-    params.set("month", String(m));
-    navigate(`?${params.toString()}`);
+    setPendingMonth(m);
   };
 
   const handleYearChange = (value: string) => {
     const y = parseInt(value, 10);
     if (!Number.isFinite(y)) return;
+    setPendingYearB(y);
+  };
+
+  const isDirty = mode === "month" && (pendingMonth !== selectedMonth || pendingYearB !== yearB);
+
+  const handleGenerate = () => {
     const params = new URLSearchParams();
     params.set("mode", "month");
-    params.set("yearB", String(y));
-    params.set("month", String(selectedMonth));
+    params.set("yearB", String(pendingYearB));
+    params.set("month", String(pendingMonth));
     navigate(`?${params.toString()}`);
   };
 
@@ -707,7 +718,7 @@ export default function WrappedPage() {
                 </Text>
                 <InlineStack gap="200" wrap>
                   <select
-                    value={selectedMonth}
+                    value={pendingMonth}
                     onChange={(e) => handleMonthChange(e.target.value)}
                     style={{
                       marginTop: 4,
@@ -734,7 +745,7 @@ export default function WrappedPage() {
                   </select>
 
                   <select
-                    value={yearB}
+                    value={pendingYearB}
                     onChange={(e) => handleYearChange(e.target.value)}
                     style={{
                       marginTop: 4,
@@ -755,6 +766,18 @@ export default function WrappedPage() {
                       );
                     })}
                   </select>
+
+                  {isDirty && (
+                    <div style={{ marginTop: 4 }}>
+                      <Button
+                        onClick={handleGenerate}
+                        loading={navigation.state !== "idle"}
+                        variant="primary"
+                      >
+                        Generate
+                      </Button>
+                    </div>
+                  )}
                 </InlineStack>
               </div>
             )}
