@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import type { Slide } from "../../../lib/wrapSlides";
 
@@ -14,6 +15,7 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
     multiplier,
     dailyData,
     currencyCode,
+    periodLabel,
     comparePeakDay,
     comparePeakRevenue,
     compareLabel,
@@ -25,6 +27,7 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
     multiplier: number;
     dailyData: DailyData[];
     currencyCode?: string | null;
+    periodLabel?: string;
     comparePeakDay?: string;
     comparePeakRevenue?: number;
     compareLabel?: string;
@@ -43,6 +46,26 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
     }
   };
   const currencySymbol = getCurrencySymbol(currencyCode || "USD");
+
+  const [hovered, setHovered] = useState<DailyData | null>(null);
+
+  const maxRevenueSafe = Math.max(maxRevenue, 1);
+  const yTicks = useMemo(() => {
+    const t1 = maxRevenueSafe;
+    const t2 = maxRevenueSafe * 0.66;
+    const t3 = maxRevenueSafe * 0.33;
+    return [t1, t2, t3, 0];
+  }, [maxRevenueSafe]);
+
+  const formatMoney = (value: number) => {
+    if (!isFinite(value)) return `${currencySymbol}0`;
+    if (value >= 1000000) return `${currencySymbol}${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `${currencySymbol}${(value / 1000).toFixed(0)}K`;
+    return `${currencySymbol}${value.toFixed(0)}`;
+  };
+
+  const hoveredRevenue = hovered ? hovered.revenue : null;
+  const hoveredDay = hovered ? hovered.date : null;
 
   return (
     <div className="relative flex min-h-full w-full flex-col justify-start px-4 sm:px-12 py-8 sm:py-8 sm:h-full">
@@ -66,10 +89,43 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
         </motion.div>
 
         {/* Spike chart */}
-        <div className="flex-1 flex items-end justify-center gap-1 sm:gap-2 px-1 sm:px-4 min-h-0">
+        <div className="relative flex-1 min-h-0">
+          {/* Y-axis labels */}
+          <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between py-4">
+            {yTicks.map((t, idx) => (
+              <div key={idx} className="text-[10px] text-white/35 tabular-nums">
+                {formatMoney(t)}
+              </div>
+            ))}
+          </div>
+
+          {/* Chart area */}
+          <div className="absolute left-12 right-0 top-0 bottom-0">
+            {/* Grid lines */}
+            <div className="absolute inset-0 flex flex-col justify-between py-4">
+              {yTicks.map((_, idx) => (
+                <div key={idx} className="h-px bg-white/10" />
+              ))}
+            </div>
+
+            {/* Tooltip */}
+            {hovered && hoveredRevenue != null && hoveredDay != null && (
+              <div className="absolute left-1/2 top-2 -translate-x-1/2 z-20 rounded-xl bg-black/60 border border-white/15 px-3 py-2 backdrop-blur-sm">
+                <div className="text-xs text-white/80">
+                  <span className="font-semibold text-white">{periodLabel || "This period"}</span>
+                  {hoveredDay ? ` • Day ${hoveredDay}` : ""}
+                </div>
+                <div className="text-sm font-semibold text-orange-300 tabular-nums">
+                  {formatMoney(hoveredRevenue)}
+                </div>
+              </div>
+            )}
+
+            <div className="h-full flex items-end justify-center gap-1 sm:gap-2 px-1 sm:px-4">
           {dailyData.map((day, i) => {
-            const heightPercent = (day.revenue / maxRevenue) * 100;
+            const heightPercent = (day.revenue / maxRevenueSafe) * 100;
             const isPeak = day.date === peakDate;
+            const showTick = day.date === "1" || day.date === String(dailyData.length) || (parseInt(day.date, 10) % 7 === 0);
 
             return (
               <motion.div
@@ -89,13 +145,17 @@ export function SeasonalPeakSlide({ slide }: { slide: Slide }) {
                   initial={{ height: 0 }}
                   animate={{ height: `${Math.max(heightPercent * 1.5, 4)}px` }}
                   transition={{ duration: 0.8, delay: 0.3 + i * 0.08 }}
+                  onMouseEnter={() => setHovered(day)}
+                  onMouseLeave={() => setHovered(null)}
                 />
                 <span className={`text-[8px] sm:text-[10px] ${isPeak ? "text-orange-400 font-bold" : "text-slate-400"}`}>
-                  {day.date.split(" ")[1]}
+                  {showTick ? day.date : ""}
                 </span>
               </motion.div>
             );
           })}
+            </div>
+          </div>
         </div>
 
         {/* Peak callout */}

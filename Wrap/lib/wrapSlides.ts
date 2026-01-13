@@ -345,6 +345,7 @@ export function buildSlides(input: WrapAnalyticsInput): Slide[] {
       title: "Your Peak Day",
       subtitle: `Best day this period vs ${effectiveCompareLabel}.`,
       payload: {
+        periodLabel: effectivePeriodLabel,
         peakDay: `Day ${peakCurr.day}`,
         peakDate: `${peakCurr.day}`,
         peakRevenue: peakCurr.salesCurr,
