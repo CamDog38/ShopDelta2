@@ -29,7 +29,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const ytdParam = url.searchParams.get("ytd");
   const modeParam = url.searchParams.get("mode");
   const monthParam = url.searchParams.get("month");
-  const compareParam = url.searchParams.get("compare");
+  const compareYearParam = url.searchParams.get("compareYear");
+  const compareMonthParam = url.searchParams.get("compareMonth");
 
   const mode: "year" | "month" = modeParam === "year" ? "year" : "month";
 
@@ -48,20 +49,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Normalize comparison period
   const currYear = yearB;
   const currMonth = month;
-  const compareMode: "yoy" | "prev" = compareParam === "prev" ? "prev" : "yoy";
   const prevYear =
     mode === "month"
-      ? (compareMode === "yoy" ? currYear - 1 : (currMonth === 1 ? currYear - 1 : currYear))
+      ? (compareYearParam ? parseInt(compareYearParam, 10) : currYear - 1)
       : (yearAParam ? parseInt(yearAParam, 10) : currYear - 1);
-  const prevMonth =
+
+  let prevMonth =
     mode === "month"
-      ? (compareMode === "yoy" ? currMonth : (currMonth === 1 ? 12 : currMonth - 1))
+      ? (compareMonthParam ? parseInt(compareMonthParam, 10) : currMonth)
       : currMonth;
+  if (!Number.isFinite(prevMonth) || prevMonth < 1 || prevMonth > 12) {
+    prevMonth = currMonth;
+  }
 
   const cacheKey = generateCacheKey("wrapped", {
     shop: session.shop,
     mode,
-    compareMode: mode === "month" ? compareMode : "",
     currYear,
     currMonth,
     prevYear,
@@ -114,7 +117,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ytd,
     }) as any;
   } else {
-    // Month mode: compare selected month/year vs previous month in the previous year
+    // Month mode: explicit month/year vs month/year
     const mmB = Math.min(Math.max(currMonth, 1), 12);
     const mmA = Math.min(Math.max(prevMonth, 1), 12);
     const mmKeyB = String(mmB).padStart(2, "0");
@@ -123,7 +126,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const yoyA = `${prevYear}-${mmKeyA}`;
 
     // Keep the range as tight as possible for speed
-    const rangeStart = new Date(Date.UTC(prevYear, mmA - 1, 1));
+    const aStart = new Date(Date.UTC(prevYear, mmA - 1, 1));
+    const bStart = new Date(Date.UTC(currYear, mmB - 1, 1));
+    const rangeStart = aStart.getTime() <= bStart.getTime() ? aStart : bStart;
     const rangeEnd = new Date(Date.UTC(currYear, mmB, 0, 23, 59, 59, 999));
 
     wrapYoY = await computeYoYMonthlyAggregate({
@@ -513,11 +518,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const payload = {
     mode,
-    compareMode,
     yearA: yearAOut,
     yearB: yearBOut,
     month: currMonth,
     compareMonth: prevMonth,
+    compareYear: prevYear,
     ytd,
     wrapYoY,
     wrapProducts,
@@ -548,11 +553,11 @@ export default function WrappedPage() {
   const data = useLoaderData<typeof loader>();
   const {
     mode,
-    compareMode,
     yearA,
     yearB,
     month,
     compareMonth,
+    compareYear,
     ytd,
     wrapYoY,
     wrapProducts,
@@ -581,13 +586,15 @@ export default function WrappedPage() {
 
   const [pendingMonth, setPendingMonth] = useState<number>(month as number);
   const [pendingYearB, setPendingYearB] = useState<number>(yearB as number);
-  const [pendingCompareMode, setPendingCompareMode] = useState<"yoy" | "prev">((compareMode as any) === "prev" ? "prev" : "yoy");
+  const [pendingCompareMonth, setPendingCompareMonth] = useState<number>((compareMonth as number) ?? (month as number));
+  const [pendingCompareYear, setPendingCompareYear] = useState<number>((compareYear as number) ?? ((yearB as number) - 1));
 
   useEffect(() => {
     setPendingMonth(month as number);
     setPendingYearB(yearB as number);
-    setPendingCompareMode((compareMode as any) === "prev" ? "prev" : "yoy");
-  }, [month, yearB, compareMode]);
+    setPendingCompareMonth((compareMonth as number) ?? (month as number));
+    setPendingCompareYear((compareYear as number) ?? ((yearB as number) - 1));
+  }, [month, yearB, compareMonth, compareYear]);
 
   // Fetch shares when opening the manager
   const handleOpenShareManager = () => {
@@ -622,16 +629,34 @@ export default function WrappedPage() {
     setPendingYearB(y);
   };
 
+  const handleCompareMonthChange = (value: string) => {
+    const m = parseInt(value, 10);
+    if (!Number.isFinite(m)) return;
+    setPendingCompareMonth(m);
+  };
+
+  const handleCompareYearChange = (value: string) => {
+    const y = parseInt(value, 10);
+    if (!Number.isFinite(y)) return;
+    setPendingCompareYear(y);
+  };
+
   const isDirty =
     mode === "month" &&
-    (pendingMonth !== selectedMonth || pendingYearB !== yearB || pendingCompareMode !== ((compareMode as any) === "prev" ? "prev" : "yoy"));
+    (
+      pendingMonth !== selectedMonth ||
+      pendingYearB !== yearB ||
+      pendingCompareMonth !== (compareMonth as number) ||
+      pendingCompareYear !== (compareYear as number)
+    );
 
   const handleGenerate = () => {
     const params = new URLSearchParams();
     params.set("mode", "month");
     params.set("yearB", String(pendingYearB));
     params.set("month", String(pendingMonth));
-    params.set("compare", pendingCompareMode);
+    params.set("compareYear", String(pendingCompareYear));
+    params.set("compareMonth", String(pendingCompareMonth));
     navigate(`?${params.toString()}`);
   };
 
@@ -763,8 +788,8 @@ export default function WrappedPage() {
                   </select>
 
                   <select
-                    value={pendingCompareMode}
-                    onChange={(e) => setPendingCompareMode(e.target.value === "prev" ? "prev" : "yoy")}
+                    value={pendingYearB}
+                    onChange={(e) => handleYearChange(e.target.value)}
                     style={{
                       marginTop: 4,
                       padding: "6px 10px",
@@ -775,13 +800,52 @@ export default function WrappedPage() {
                       fontSize: 13,
                     }}
                   >
-                    <option value="yoy">Same month last year</option>
-                    <option value="prev">Previous month</option>
+                    {Array.from({ length: 6 }).map((_, idx) => {
+                      const y = new Date().getUTCFullYear() - idx;
+                      return (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <div style={{ marginTop: 10 }}>
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      vs
+                    </Text>
+                  </div>
+
+                  <select
+                    value={pendingCompareMonth}
+                    onChange={(e) => handleCompareMonthChange(e.target.value)}
+                    style={{
+                      marginTop: 4,
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(148,163,184,0.6)",
+                      background: "rgba(15,23,42,0.7)",
+                      color: "white",
+                      fontSize: 13,
+                    }}
+                  >
+                    {Array.from({ length: 12 }).map((_, idx) => {
+                      const m = idx + 1;
+                      const n = new Date(Date.UTC(pendingCompareYear, m - 1, 1)).toLocaleString(
+                        "en-US",
+                        { month: "long" },
+                      );
+                      return (
+                        <option key={m} value={m}>
+                          {n}
+                        </option>
+                      );
+                    })}
                   </select>
 
                   <select
-                    value={pendingYearB}
-                    onChange={(e) => handleYearChange(e.target.value)}
+                    value={pendingCompareYear}
+                    onChange={(e) => handleCompareYearChange(e.target.value)}
                     style={{
                       marginTop: 4,
                       padding: "6px 10px",
@@ -818,7 +882,7 @@ export default function WrappedPage() {
             )}
             <div style={{ borderRadius: 24, overflow: "hidden" }}>
               <WrapPlayer
-                key={`${mode}:${yearB}:${selectedMonth}:${yearA}:${compareMode}:${compareMonthNum}`}
+                key={`${mode}:${yearB}:${selectedMonth}:${yearA}:${compareMonthNum}`}
                 slides={wrapSlides}
               />
             </div>
