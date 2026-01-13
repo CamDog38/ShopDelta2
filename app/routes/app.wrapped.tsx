@@ -12,6 +12,7 @@ import {
   computeYoYMonthlyAggregate,
   computeYoYMonthlyProduct,
 } from "../analytics.yoy.server";
+import cache, { CACHE_TTL, generateCacheKey } from "../cache.server";
 import wrapStylesUrl from "../../Wrap/globals.css?url";
 import { WrapPlayer } from "../../Wrap/components/wrap/WrapPlayer";
 import { buildSlides } from "../../Wrap/lib/wrapSlides";
@@ -29,13 +30,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const modeParam = url.searchParams.get("mode");
   const monthParam = url.searchParams.get("month");
 
-  const mode: "year" | "month" = modeParam === "month" ? "month" : "year";
+  const mode: "year" | "month" = modeParam === "year" ? "year" : "month";
 
   const now = new Date();
   const defaultYearB = now.getUTCFullYear();
-  const defaultYearA = defaultYearB - 1;
   const yearB = yearBParam ? parseInt(yearBParam, 10) : defaultYearB;
-  const yearA = yearAParam ? parseInt(yearAParam, 10) : defaultYearA;
   const ytd = !!(ytdParam && (/^(1|true)$/i).test(ytdParam));
 
   let month = monthParam ? parseInt(monthParam, 10) : now.getUTCMonth() + 1;
@@ -43,7 +42,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
     month = now.getUTCMonth() + 1;
   }
 
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+
+  // Normalize comparison period
+  const currYear = yearB;
+  const currMonth = month;
+  const prevYear = mode === "month" ? currYear - 1 : (yearAParam ? parseInt(yearAParam, 10) : currYear - 1);
+  const prevMonth = mode === "month" ? (currMonth === 1 ? 12 : currMonth - 1) : currMonth;
+
+  const cacheKey = generateCacheKey("wrapped", {
+    shop: session.shop,
+    mode,
+    currYear,
+    currMonth,
+    prevYear,
+    prevMonth,
+    ytd: mode === "year" ? (ytd ? "1" : "0") : "0",
+  });
+  const cached = cache.get<any>(cacheKey);
+  if (cached) {
+    return json(cached);
+  }
 
   const SHOP_QUERY = `#graphql
     query ShopInfoForWrapped {
@@ -70,6 +89,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let wrapProducts: YoYResult;
 
   if (mode === "year") {
+    const yearA = prevYear;
+    const yearB = currYear;
     wrapYoY = await computeYoYAnnualAggregate({
       admin,
       yearA,
@@ -84,14 +105,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ytd,
     }) as any;
   } else {
-    // Month mode: compare selected month vs the same month last year
-    const mm = Math.min(Math.max(month, 1), 12);
-    const mmKey = String(mm).padStart(2, "0");
-    const yoyB = `${yearB}-${mmKey}`;
-    const yoyA = `${yearA}-${mmKey}`;
+    // Month mode: compare selected month/year vs previous month in the previous year
+    const mmB = Math.min(Math.max(currMonth, 1), 12);
+    const mmA = Math.min(Math.max(prevMonth, 1), 12);
+    const mmKeyB = String(mmB).padStart(2, "0");
+    const mmKeyA = String(mmA).padStart(2, "0");
+    const yoyB = `${currYear}-${mmKeyB}`;
+    const yoyA = `${prevYear}-${mmKeyA}`;
 
-    const rangeStart = new Date(Date.UTC(yearA, 0, 1));
-    const rangeEnd = new Date(Date.UTC(yearB, 11, 31, 23, 59, 59, 999));
+    // Keep the range as tight as possible for speed
+    const rangeStart = new Date(Date.UTC(prevYear, mmA - 1, 1));
+    const rangeEnd = new Date(Date.UTC(currYear, mmB, 0, 23, 59, 59, 999));
 
     wrapYoY = await computeYoYMonthlyAggregate({
       admin,
@@ -125,17 +149,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Fetch extended analytics for additional slides
   const startDate = mode === "year"
-    ? new Date(Date.UTC(yearB, 0, 1))
-    : new Date(Date.UTC(yearB, month - 1, 1));
+    ? new Date(Date.UTC(currYear, 0, 1))
+    : new Date(Date.UTC(currYear, currMonth - 1, 1));
   const endDate = mode === "year"
-    ? new Date(Date.UTC(yearB, 11, 31, 23, 59, 59, 999))
-    : new Date(Date.UTC(yearB, month, 0, 23, 59, 59, 999));
+    ? new Date(Date.UTC(currYear, 11, 31, 23, 59, 59, 999))
+    : new Date(Date.UTC(currYear, currMonth, 0, 23, 59, 59, 999));
   const prevStartDate = mode === "year"
-    ? new Date(Date.UTC(yearA, 0, 1))
-    : new Date(Date.UTC(yearA, month - 1, 1));
+    ? new Date(Date.UTC(prevYear, 0, 1))
+    : new Date(Date.UTC(prevYear, prevMonth - 1, 1));
   const prevEndDate = mode === "year"
-    ? new Date(Date.UTC(yearA, 11, 31, 23, 59, 59, 999))
-    : new Date(Date.UTC(yearA, month, 0, 23, 59, 59, 999));
+    ? new Date(Date.UTC(prevYear, 11, 31, 23, 59, 59, 999))
+    : new Date(Date.UTC(prevYear, prevMonth, 0, 23, 59, 59, 999));
 
   // Query for order counts, customer stats, and extended analytics
   // Note: ordersCount was removed from Customer type in 2025-01 API, so we track it ourselves
@@ -475,11 +499,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     console.error("Error fetching extended analytics:", err);
   }
 
-  return json({
+  const yearAOut = prevYear;
+  const yearBOut = currYear;
+
+  const payload = {
     mode,
-    yearA,
-    yearB,
-    month,
+    yearA: yearAOut,
+    yearB: yearBOut,
+    month: currMonth,
     ytd,
     wrapYoY,
     wrapProducts,
@@ -500,7 +527,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     hourlyBreakdown,
     fulfillmentStats,
     clvStats,
-  });
+  };
+
+  cache.set(cacheKey, payload, CACHE_TTL.SHORT);
+  return json(payload);
 }
 
 export default function WrappedPage() {
@@ -546,8 +576,15 @@ export default function WrappedPage() {
     "en-US",
     { month: "long" },
   );
+
+  const compareMonth = mode === "month" ? (selectedMonth === 1 ? 12 : selectedMonth - 1) : selectedMonth;
+  const compareMonthName = new Date(Date.UTC(yearA, compareMonth - 1, 1)).toLocaleString(
+    "en-US",
+    { month: "long" },
+  );
+
   const periodLabel = mode === "year" ? String(yearB) : `${monthName} ${yearB}`;
-  const compareLabel = mode === "year" ? String(yearA) : `${monthName} ${yearA}`;
+  const compareLabel = mode === "year" ? String(yearA) : `${compareMonthName} ${yearA}`;
 
   const handleMonthChange = (value: string) => {
     const m = parseInt(value, 10);
@@ -556,6 +593,16 @@ export default function WrappedPage() {
     params.set("mode", "month");
     params.set("yearB", String(yearB));
     params.set("month", String(m));
+    navigate(`?${params.toString()}`);
+  };
+
+  const handleYearChange = (value: string) => {
+    const y = parseInt(value, 10);
+    if (!Number.isFinite(y)) return;
+    const params = new URLSearchParams();
+    params.set("mode", "month");
+    params.set("yearB", String(y));
+    params.set("month", String(selectedMonth));
     navigate(`?${params.toString()}`);
   };
 
@@ -658,32 +705,57 @@ export default function WrappedPage() {
                 <Text as="p" variant="bodySm" tone="subdued">
                   Select month
                 </Text>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => handleMonthChange(e.target.value)}
-                  style={{
-                    marginTop: 4,
-                    padding: "6px 10px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(148,163,184,0.6)",
-                    background: "rgba(15,23,42,0.7)",
-                    color: "white",
-                    fontSize: 13,
-                  }}
-               >
-                  {Array.from({ length: 12 }).map((_, idx) => {
-                    const m = idx + 1;
-                    const n = new Date(Date.UTC(yearB, m - 1, 1)).toLocaleString(
-                      "en-US",
-                      { month: "long" },
-                    );
-                    return (
-                      <option key={m} value={m}>
-                        {n}
-                      </option>
-                    );
-                  })}
-                </select>
+                <InlineStack gap="200" wrap>
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => handleMonthChange(e.target.value)}
+                    style={{
+                      marginTop: 4,
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(148,163,184,0.6)",
+                      background: "rgba(15,23,42,0.7)",
+                      color: "white",
+                      fontSize: 13,
+                    }}
+                  >
+                    {Array.from({ length: 12 }).map((_, idx) => {
+                      const m = idx + 1;
+                      const n = new Date(Date.UTC(yearB, m - 1, 1)).toLocaleString(
+                        "en-US",
+                        { month: "long" },
+                      );
+                      return (
+                        <option key={m} value={m}>
+                          {n}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <select
+                    value={yearB}
+                    onChange={(e) => handleYearChange(e.target.value)}
+                    style={{
+                      marginTop: 4,
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(148,163,184,0.6)",
+                      background: "rgba(15,23,42,0.7)",
+                      color: "white",
+                      fontSize: 13,
+                    }}
+                  >
+                    {Array.from({ length: 6 }).map((_, idx) => {
+                      const y = new Date().getUTCFullYear() - idx;
+                      return (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </InlineStack>
               </div>
             )}
             <div style={{ borderRadius: 24, overflow: "hidden" }}>

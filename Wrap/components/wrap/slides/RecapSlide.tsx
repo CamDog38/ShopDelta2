@@ -7,12 +7,20 @@ export function RecapSlide({ slide }: { slide: Slide }) {
   const handle = (slide.payload?.handle as string | undefined) || "";
 
   return (
-    <div className="relative flex min-h-full w-full flex-col items-center justify-center px-4 sm:px-16 py-8 sm:py-0 sm:h-full">
+    <div className="relative flex min-h-full w-full flex-col items-center justify-center px-4 sm:px-16 py-12 sm:py-0 sm:h-full">
+      {/* Background gradient - covers full area smoothly */}
       <motion.div
-        className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_100%_0%,rgba(129,140,248,0.45),transparent_55%),radial-gradient(circle_at_0%_100%,rgba(45,212,191,0.45),transparent_55%)]"
+        className="absolute inset-0 opacity-50 bg-gradient-to-br from-indigo-600/40 via-slate-900/60 to-teal-500/40"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.5 }}
+        transition={{ duration: 1, ease: "easeOut" }}
+      />
+      {/* Additional radial highlights */}
+      <motion.div
+        className="absolute inset-0 opacity-40 bg-[radial-gradient(ellipse_at_top,rgba(129,140,248,0.5),transparent_60%),radial-gradient(ellipse_at_bottom,rgba(45,212,191,0.4),transparent_60%)]"
         initial={{ opacity: 0, scale: 1.05 }}
         animate={{ opacity: 0.4, scale: 1 }}
-        transition={{ duration: 1, ease: "easeOut" }}
+        transition={{ duration: 1.2, ease: "easeOut" }}
       />
 
       <motion.div

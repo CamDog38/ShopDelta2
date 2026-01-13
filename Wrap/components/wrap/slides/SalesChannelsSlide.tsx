@@ -75,15 +75,15 @@ export function SalesChannelsSlide({ slide }: { slide: Slide }) {
         transition={{ duration: 1 }}
       />
 
-      <div className="relative z-10 flex h-full flex-col gap-6">
+      <div className="relative z-10 flex h-full flex-col gap-4 sm:gap-6">
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-2xl font-semibold tracking-tight">{slide.title}</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{slide.title}</h2>
           {slide.subtitle && (
-            <p className="mt-1 text-sm text-slate-200/80">{slide.subtitle}</p>
+            <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-slate-200/80">{slide.subtitle}</p>
           )}
         </motion.div>
 
@@ -94,14 +94,14 @@ export function SalesChannelsSlide({ slide }: { slide: Slide }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <div className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
+          <div className="text-2xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
             {formatValue(totalSales)}
           </div>
-          <div className="text-xs text-slate-400 mt-1">total revenue across all channels</div>
+          <div className="text-[10px] sm:text-xs text-slate-400 mt-1">total revenue across all channels</div>
         </motion.div>
 
         {/* Channel breakdown */}
-        <div className="flex-1 flex flex-col justify-center gap-4">
+        <div className="flex-1 flex flex-col justify-center gap-3 sm:gap-4">
           {channels.slice(0, 5).map((channel, i) => {
             const style = getChannelStyle(channel.channel);
             const percent = totalSales > 0 ? (channel.sales / totalSales) * 100 : 0;
@@ -110,20 +110,20 @@ export function SalesChannelsSlide({ slide }: { slide: Slide }) {
             return (
               <motion.div
                 key={channel.channel}
-                className="flex items-center gap-4"
+                className="flex items-center gap-3 sm:gap-4"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.3 + i * 0.1 }}
               >
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white/10 flex items-center justify-center text-lg sm:text-xl shrink-0">
                   {style.icon}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-white">{style.displayName}</span>
-                    <span className="text-sm font-bold text-white">{formatValue(channel.sales)}</span>
+                    <span className="text-xs sm:text-sm font-medium text-white truncate">{style.displayName}</span>
+                    <span className="text-xs sm:text-sm font-bold text-white shrink-0 ml-2">{formatValue(channel.sales)}</span>
                   </div>
-                  <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-2 sm:h-3 bg-white/10 rounded-full overflow-hidden">
                     <motion.div
                       className={`h-full rounded-full bg-gradient-to-r ${style.color}`}
                       initial={{ width: 0 }}
@@ -132,8 +132,8 @@ export function SalesChannelsSlide({ slide }: { slide: Slide }) {
                     />
                   </div>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-slate-400">{channel.orders.toLocaleString()} orders</span>
-                    <span className="text-xs text-slate-400">{percent.toFixed(1)}% of total</span>
+                    <span className="text-[10px] sm:text-xs text-slate-400">{channel.orders.toLocaleString()} orders</span>
+                    <span className="text-[10px] sm:text-xs text-slate-400">{percent.toFixed(1)}% of total</span>
                   </div>
                 </div>
               </motion.div>

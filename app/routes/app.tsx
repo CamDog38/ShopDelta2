@@ -27,10 +27,9 @@ export default function App() {
         <Link to="/app" rel="home">
           Home
         </Link>
-        <Link to="/app/analytics">Analytics</Link>
-        <Link to="/app/visualisations">Visualisations</Link>
         <Link to="/app/wrapped">Wrapped</Link>
-        <Link to="/app/utm-summary">Campaign Analytics</Link>
+        <Link to="/app/advanced-analytics">Advanced Analytics</Link>
+        <Link to="/app/visualisations">Visualisations</Link>
         <Link to="/app/billing">Billing</Link>
       </NavMenu>
       <Outlet />

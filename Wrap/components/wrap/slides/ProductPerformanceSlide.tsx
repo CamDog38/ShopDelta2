@@ -35,8 +35,9 @@ export function ProductPerformanceSlide({ slide }: { slide: Slide }) {
           )}
         </motion.div>
 
+        {/* Desktop: Grid treemap layout */}
         <motion.div
-          className="flex-1 grid grid-cols-4 grid-rows-3 gap-1 rounded-xl overflow-hidden"
+          className="flex-1 hidden sm:grid grid-cols-4 grid-rows-3 gap-1 rounded-xl overflow-hidden"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -76,6 +77,44 @@ export function ProductPerformanceSlide({ slide }: { slide: Slide }) {
                   <div className={`${i < 2 ? "text-sm" : "text-[9px]"} font-semibold text-white/90`}>
                     ${(product.revenue / 1000).toFixed(0)}K
                   </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+
+        {/* Mobile: Simple list layout */}
+        <motion.div
+          className="flex-1 flex sm:hidden flex-col gap-2 overflow-y-auto"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          {sortedProducts.slice(0, 8).map((product, i) => {
+            const isPositive = product.growth >= 0;
+            const intensity = Math.min(Math.abs(product.growth) / 50, 1);
+            const bgColor = isPositive
+              ? `rgba(34, 197, 94, ${0.3 + intensity * 0.5})`
+              : `rgba(239, 68, 68, ${0.3 + intensity * 0.5})`;
+
+            return (
+              <motion.div
+                key={product.name}
+                className="relative overflow-hidden rounded-lg p-3 flex items-center justify-between"
+                style={{ backgroundColor: bgColor }}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 + i * 0.05 }}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-white truncate">{product.name}</div>
+                  <div className="text-xs text-white/70 truncate">{product.category}</div>
+                </div>
+                <div className="text-right ml-3 shrink-0">
+                  <div className={`text-sm font-bold ${isPositive ? "text-emerald-300" : "text-red-300"}`}>
+                    {isPositive ? "+" : ""}{product.growth.toFixed(1)}%
+                  </div>
+                  <div className="text-xs text-white/80">${(product.revenue / 1000).toFixed(0)}K</div>
                 </div>
               </motion.div>
             );
